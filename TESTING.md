@@ -182,3 +182,26 @@ Token Usage
 Cost
 ```
 
+---
+
+# 11. 外部 Agent 实测记录（2026-08-03）
+
+真实环境冒烟测试（非 Mock），作为能力基线：
+
+| Runtime | 命令形态 | 模型 | 结果 | 备注 |
+|---|---|---|---|---|
+| Claude Code | `claude -p --output-format json --settings <file>` | deepseek-v4-flash[1m] | ✓ | 成本估算失真（$0.127 / 25K tokens），见 ADR-0014 |
+| Claude Code | 同上（默认 settings） | mimo-v2.5-pro (token-plan) | ✗ 401 | key 失效，需刷新 |
+| OpenCode | `opencode run --format json` | opencode/deepseek-v4-flash-free | ✓ | cost=0，JSONL 事件含 tokens/cost |
+| OpenCode | 同上 | opencode/mimo-v2.5-free | ✓ | cost=0 |
+| Codex | `codex exec --json -m deepseek-v4-flash` | deepseek-v4-flash | ✓ | JSONL：thread/turn/item + usage |
+| OpenClaw | `openclaw agent --json --agent main` | deepseek/deepseek-v4-flash | ✓ | usage 完整，sandbox 当前 off |
+| Reasonix | `reasonix run -m deepseek-v4-flash` | deepseek-v4-flash | ✓ | cost $0.0004，摘要含 cost |
+
+要点：
+
+```text
+Claude Code 401 会重试 11 次 → 适配器必须设置进程级硬超时
+成本统计以 provider usage × 配置价格为准，不信任 Agent 上报 cost
+所有适配器必须解析结构化输出（json / jsonl），并单独记录 exit code
+```

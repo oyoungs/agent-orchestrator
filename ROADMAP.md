@@ -15,13 +15,23 @@
 
 任务：
 
-* [ ] Inspect OS
-* [ ] Inspect Git
-* [ ] Inspect installed runtimes
-* [ ] Inspect Agent CLIs
-* [ ] Inspect Model APIs
-* [ ] Identify constraints
-* [ ] Ask user unresolved questions
+* [x] Inspect OS
+* [x] Inspect Git
+* [x] Inspect installed runtimes
+* [x] Inspect Agent CLIs
+* [x] Inspect Model APIs
+* [x] Identify constraints
+* [x] Ask user unresolved questions
+
+完成于 2026-08-03。关键结论：
+
+```text
+5/5 Agent Runtime 可用（claude 2.1.220 / opencode 1.17.4 / codex 0.146.0-alpha.9.2 /
+                         openclaw 2026.6.1 / reasonix 0.43.0）
+全部云模型 API 可达；免费模型梯队已验证
+MIMO token-plan key 失效（401），待用户刷新
+需求澄清完成 → DECISIONS.md ADR-0001..0015
+```
 
 禁止大规模实现。
 
@@ -57,6 +67,8 @@ Worker Lifecycle
 Failure Model
 ```
 
+已完成 2026-08-03：见 ARCHITECTURE.md（组件、数据模型、状态机、适配接口、安全、可观测性）。
+
 ---
 
 # Phase 2 — MVP
@@ -80,6 +92,21 @@ Result
 ```
 
 暂时不追求复杂并行。
+
+基于已确认决策的 MVP 技术栈：
+
+```text
+TypeScript + Node.js（pnpm）
+SQLite（better-sqlite3）+ 进程内队列
+CLI：agent run / agent status（commander）
+Agent Adapter：ACP-first（opencode / openclaw / reasonix）+ Claude / Codex 进程适配器
+安全：Runtime 原生权限 + 高风险动作人工确认
+可观测：JSONL 日志 + usage_records 落库
+```
+
+验收：`agent run "修复这个项目的测试"` 能完整走通
+`CLI → Task → Router → Agent Adapter → Model → Worker → Result` 并产出
+`Build / Test / Lint` 验证报告。
 
 ---
 
@@ -232,4 +259,3 @@ Cluster
 ```
 
 不要提前实现。
-

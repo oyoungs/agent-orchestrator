@@ -316,3 +316,29 @@ Multi-machine Scheduling
 
 如果未来需要，单独进入 Roadmap。
 
+---
+
+# 10. MVP Scope (Confirmed 2026-08-03)
+
+以下决策已与用户确认，记录于 DECISIONS.md ADR-0006..0015：
+
+```text
+实现栈        TypeScript + Node.js（pnpm）
+持久化        SQLite + 进程内队列
+任务范围      MVP 仅处理 coding 类任务（重构 / 测试 / 修复 / 审查）
+CLI          agent run <task> 与 agent status
+Workspace    git worktree（有 repo）/ 目录副本（无 repo）混合
+安全边界      复用 Runtime 原生权限 + 高风险动作人工确认
+Agent 接入    ACP 优先（opencode / openclaw / reasonix）+ Claude / Codex 进程适配器
+模型接入      OpenAI 兼容为主，Codex 走 Responses，Claude 走 Anthropic env
+配置格式      TOML
+```
+
+## 10.1 实测基线（2026-08-03）
+
+```text
+5/5 Runtime 非交互链路可用（Claude Code / OpenCode / Codex / OpenClaw / Reasonix）
+免费模型已验证：opencode/deepseek-v4-flash-free、opencode/mimo-v2.5-free
+MIMO token-plan（Claude Code 接入）当前 401 Invalid API Key，需刷新后重新验证
+本地 oMLX / Ollama 服务未运行
+```

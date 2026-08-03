@@ -4,7 +4,9 @@ A local-first Multi-Agent / Multi-Model Orchestration Framework.
 
 ## Status
 
-Early Development / Architecture Discovery
+Phase 0 (Discovery) 已完成 · 架构已确认（2026-08-03）
+
+下一步：Phase 2 MVP
 
 ---
 
@@ -119,6 +121,15 @@ See:
 ROADMAP.md
 ```
 
+## Tech Stack (Confirmed)
+
+```text
+TypeScript + Node.js + pnpm
+SQLite + 进程内队列
+TOML 配置
+Agent Adapter: ACP-first + Claude/Codex 进程适配器
+```
+
 ---
 
 ## Architecture
@@ -169,4 +180,3 @@ See:
 ```text
 TESTING.md
 ```
-
