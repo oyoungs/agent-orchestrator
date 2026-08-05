@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Orchestrator — 软件架构设计蓝图</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0f14;
+  --bg2:#0f151c;
+  --panel:#121a22;
+  --panel2:#0d131a;
+  --line:#1e2a36;
+  --line2:#2b3b4b;
+  --ink:#dce6ee;
+  --ink-dim:#8fa1b2;
+  --ink-faint:#5d6f80;
+  --amber:#f0a942;
+  --amber-bright:#ffc46b;
+  --cyan:#55c2c8;
+  --green:#6fce9d;
+  --red:#e06c6c;
+  --mono:"IBM Plex Mono","SF Mono",Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --display:"Fraunces",Georgia,"Songti SC","STSong",serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:15px;
+  line-height:1.7;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:"";
+  position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(85,194,200,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(85,194,200,.035) 1px,transparent 1px);
+  background-size:44px 44px;
+  pointer-events:none;z-index:0;
+}
+#progress{
+  position:fixed;top:0;left:0;height:3px;width:0%;
+  background:linear-gradient(90deg,var(--amber),var(--cyan));
+  z-index:100;box-shadow:0 0 12px rgba(240,169,66,.5);
+}
+.layout{display:flex;position:relative;z-index:1}
+
+/* ---------- sidebar ---------- */
+.sidebar{
+  width:286px;flex:0 0 286px;position:sticky;top:0;height:100vh;
+  border-right:1px solid var(--line);
+  background:linear-gradient(180deg,var(--bg2),var(--bg));
+  overflow-y:auto;padding:28px 18px 40px;
+}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:26px}
+.brand-mark{
+  width:40px;height:40px;flex:0 0 40px;border:1px solid var(--amber);
+  display:grid;place-items:center;font-family:var(--mono);font-weight:600;
+  color:var(--amber);font-size:15px;letter-spacing:-1px;
+  background:repeating-linear-gradient(45deg,transparent 0 4px,rgba(240,169,66,.06) 4px 8px);
+}
+.brand-name{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.5px;color:var(--ink)}
+.brand-sub{font-size:11px;color:var(--ink-faint);letter-spacing:1px;text-transform:uppercase;margin-top:2px}
+.toc-title{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--ink-faint);margin:0 0 10px 4px}
+.toc{list-style:none}
+.toc a{
+  display:flex;gap:10px;align-items:baseline;padding:7px 10px;margin:2px 0;
+  color:var(--ink-dim);text-decoration:none;font-size:13.5px;border-left:2px solid transparent;
+  transition:all .15s;
+}
+.toc a .n{font-family:var(--mono);font-size:11px;color:var(--ink-faint);flex:0 0 30px}
+.toc a:hover{color:var(--ink);border-left-color:var(--line2)}
+.toc a.active{color:var(--amber-bright);border-left-color:var(--amber);background:linear-gradient(90deg,rgba(240,169,66,.08),transparent)}
+.toc a.active .n{color:var(--amber)}
+.toc .sub a{padding-left:30px;font-size:12.5px}
+.sidebar-foot{margin-top:28px;padding-top:16px;border-top:1px dashed var(--line);font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);line-height:1.8}
+
+/* ---------- main ---------- */
+.main{flex:1;min-width:0;padding:0 54px 80px}
+.hero{
+  padding:74px 0 44px;border-bottom:1px solid var(--line);
+  position:relative;
+}
+.hero::after{
+  content:"";position:absolute;left:0;bottom:-1px;width:140px;height:2px;
+  background:linear-gradient(90deg,var(--amber),var(--cyan));
+}
+.kicker{
+  font-family:var(--mono);font-size:12px;letter-spacing:3px;color:var(--cyan);
+  text-transform:uppercase;margin-bottom:14px;
+}
+.hero h1{
+  font-family:var(--display);font-weight:700;font-size:44px;line-height:1.08;
+  letter-spacing:-.5px;max-width:760px;
+}
+.hero h1 em{font-style:italic;color:var(--amber-bright)}
+.hero p.lede{margin-top:16px;max-width:640px;color:var(--ink-dim);font-size:16px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.chip{
+  font-family:var(--mono);font-size:11px;padding:4px 10px;border:1px solid var(--line2);
+  color:var(--ink-dim);background:var(--panel);letter-spacing:.4px;
+}
+.chip.amber{color:var(--amber-bright);border-color:rgba(240,169,66,.4)}
+.chip.cyan{color:var(--cyan);border-color:rgba(85,194,200,.4)}
+.chip.green{color:var(--green);border-color:rgba(111,206,157,.35)}
+
+section{margin-top:64px;scroll-margin-top:20px}
+h2{
+  font-family:var(--display);font-weight:700;font-size:27px;letter-spacing:-.2px;
+  display:flex;align-items:baseline;gap:14px;margin-bottom:8px;
+}
+h2 .sec-num{
+  font-family:var(--mono);font-size:13px;color:var(--amber);border:1px solid var(--line2);
+  padding:2px 8px;letter-spacing:1px;background:var(--panel);
+}
+.sec-desc{color:var(--ink-dim);font-size:14px;margin-bottom:26px;max-width:780px}
+h3{
+  font-family:var(--display);font-weight:700;font-size:19px;margin:34px 0 12px;color:var(--ink);
+}
+h4{font-family:var(--mono);font-size:13px;letter-spacing:.6px;color:var(--cyan);margin:20px 0 8px;text-transform:uppercase}
+p{margin:10px 0}
+a{color:var(--cyan);text-decoration:none}
+a:hover{text-decoration:underline}
+strong{color:var(--ink)}
+code{
+  font-family:var(--mono);font-size:12.5px;background:var(--panel2);border:1px solid var(--line);
+  padding:1px 6px;border-radius:3px;color:var(--amber-bright);
+}
+
+/* code blocks */
+.codewrap{position:relative;margin:14px 0}
+pre{
+  background:var(--panel2);border:1px solid var(--line);border-radius:6px;
+  padding:16px 18px;overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.65;
+  color:#c9d8e4;
+}
+pre .c{color:var(--ink-faint)}
+.copy-btn{
+  position:absolute;top:8px;right:8px;font-family:var(--mono);font-size:10.5px;
+  color:var(--ink-dim);background:var(--panel);border:1px solid var(--line2);
+  padding:3px 9px;cursor:pointer;border-radius:3px;letter-spacing:.5px;transition:all .15s;
+}
+.copy-btn:hover{color:var(--amber-bright);border-color:var(--amber)}
+
+/* tables */
+.tblwrap{overflow-x:auto;margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{
+  font-family:var(--mono);font-size:11.5px;text-transform:uppercase;letter-spacing:1px;
+  color:var(--cyan);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line2);
+  background:var(--panel);white-space:nowrap;
+}
+td{padding:9px 12px;border-bottom:1px solid var(--line);color:var(--ink-dim);vertical-align:top}
+tr:hover td{background:rgba(85,194,200,.03)}
+td code{white-space:nowrap}
+
+/* component cards */
+.card{
+  border:1px solid var(--line);background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border-radius:8px;padding:22px 24px 18px;margin:20px 0;
+  position:relative;overflow:hidden;
+}
+.card::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:linear-gradient(180deg,var(--amber),var(--cyan));
+}
+.card-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.card-id{font-family:var(--mono);font-size:12px;color:var(--amber);letter-spacing:1px}
+.card-title{font-family:var(--display);font-weight:700;font-size:19px}
+.card-path{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);margin-left:auto}
+.card-lead{color:var(--ink-dim);font-size:13.5px;margin-bottom:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 26px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
+.kv{font-size:13px;margin:3px 0;color:var(--ink-dim)}
+.kv b{color:var(--ink);font-weight:600;font-family:var(--mono);font-size:12px;margin-right:8px}
+
+/* todo */
+.todo-title{display:flex;align-items:center;gap:10px;margin:16px 0 8px}
+.todo-title .cnt{
+  font-family:var(--mono);font-size:10.5px;color:var(--green);border:1px solid rgba(111,206,157,.35);
+  padding:1px 8px;border-radius:20px;
+}
+ul.todo{list-style:none}
+ul.todo li{
+  padding:5px 0 5px 30px;position:relative;font-size:13.5px;color:var(--ink-dim);
+  border-bottom:1px dashed rgba(30,42,54,.7);
+}
+ul.todo li:last-child{border-bottom:none}
+ul.todo li::before{
+  content:"";position:absolute;left:4px;top:9px;width:13px;height:13px;
+  border:1px solid var(--line2);border-radius:3px;background:var(--panel2);
+}
+ul.todo li code{font-size:12px}
+
+/* flow diagram (state machine) */
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:16px 0}
+.flow-node{
+  font-family:var(--mono);font-size:12px;padding:7px 13px;border:1px solid var(--line2);
+  border-radius:5px;color:var(--ink);background:var(--panel);
+}
+.flow-node.amber{border-color:rgba(240,169,66,.45);color:var(--amber-bright)}
+.flow-node.cyan{border-color:rgba(85,194,200,.45);color:var(--cyan)}
+.flow-node.green{border-color:rgba(111,206,157,.4);color:var(--green)}
+.flow-node.red{border-color:rgba(224,108,108,.4);color:var(--red)}
+.flow-arrow{color:var(--ink-faint);font-family:var(--mono);font-size:12px}
+
+/* arch diagram */
+.arch{
+  border:1px solid var(--line);border-radius:8px;padding:18px;margin:16px 0;
+  background:var(--panel2);font-family:var(--mono);font-size:12px;line-height:1.75;
+  overflow-x:auto;color:#b9cad8;
+}
+.arch .hl{color:var(--amber-bright)}
+.arch .hl2{color:var(--cyan)}
+.arch .dim{color:var(--ink-faint)}
+
+footer{
+  margin-top:80px;padding-top:24px;border-top:1px solid var(--line);
+  font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);display:flex;gap:16px;flex-wrap:wrap;
+}
+
+@media (max-width:1020px){
+  .layout{flex-direction:column}
+  .sidebar{width:100%;flex:none;position:static;height:auto;border-right:none;border-bottom:1px solid var(--line);padding:18px}
+  .toc{display:flex;flex-wrap:wrap;gap:2px}
+  .toc a{border-left:none;border-bottom:2px solid transparent;padding:6px 10px}
+  .toc a.active{border-bottom-color:var(--amber);background:none}
+  .toc .sub a{display:none}
+  .main{padding:0 22px 60px}
+  .hero h1{font-size:32px}
+  .grid2,.grid3{grid-template-columns:1fr}
+  .card-path{display:none}
+}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">AO</div>
+      <div>
+        <div class="brand-name">agent-orchestrator</div>
+        <div class="brand-sub">Architecture Blueprint</div>
+      </div>
+    </div>
+    <div class="toc-title">Contents</div>
+    <ul class="toc" id="toc">
+      <li><a href="#s1"><span class="n">01</span>总体架构概览</a></li>
+      <li><a href="#s2"><span class="n">02</span>组件设计</a></li>
+      <li class="sub"><a href="#c1">C1 CLI</a></li>
+      <li class="sub"><a href="#c2">C2 Daemon</a></li>
+      <li class="sub"><a href="#c3">C3 Management API</a></li>
+      <li class="sub"><a href="#c4">C4 Task Gateway</a></li>
+      <li class="sub"><a href="#c5">C5 Model Registry</a></li>
+      <li class="sub"><a href="#c6">C6 Agent Registry</a></li>
+      <li class="sub"><a href="#c7">C7 Router</a></li>
+      <li class="sub"><a href="#c8">C8 Planner</a></li>
+      <li class="sub"><a href="#c9">C9 Scheduler</a></li>
+      <li class="sub"><a href="#c10">C10 Worker</a></li>
+      <li class="sub"><a href="#c11">C11 Agent Adapter</a></li>
+      <li class="sub"><a href="#c12">C12 Model Connector</a></li>
+      <li class="sub"><a href="#c13">C13 Supervisor</a></li>
+      <li class="sub"><a href="#c14">C14 Validator</a></li>
+      <li class="sub"><a href="#c15">C15 Workspace</a></li>
+      <li class="sub"><a href="#c16">C16 Security</a></li>
+      <li class="sub"><a href="#c17">C17 Observability</a></li>
+      <li class="sub"><a href="#c18">C18 SQLite Store</a></li>
+      <li class="sub"><a href="#c19">C19 WebUI</a></li>
+      <li><a href="#s3"><span class="n">03</span>数据模型 / Schema</a></li>
+      <li><a href="#s4"><span class="n">04</span>状态机与错误处理</a></li>
+      <li><a href="#s5"><span class="n">05</span>安全设计</a></li>
+      <li><a href="#s6"><span class="n">06</span>可观测性</a></li>
+      <li><a href="#s7"><span class="n">07</span>配置（TOML）</a></li>
+      <li><a href="#s8"><span class="n">08</span>目录结构</a></li>
+      <li><a href="#s9"><span class="n">09</span>测试策略</a></li>
+      <li><a href="#s10"><span class="n">10</span>Roadmap 映射</a></li>
+      <li><a href="#s11"><span class="n">11</span>风险与开放问题</a></li>
+    </ul>
+    <div class="sidebar-foot">
+      ADR-0001..0017 · ACCEPTED<br>
+      docs/ARCHITECTURE-DESIGN.md<br>
+      generated 2026-08-05
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <header class="hero">
+      <div class="kicker">Agent Orchestrator · Design Blueprint v0.1.0</div>
+      <h1>本地 Multi-Agent / Multi-Model 编排框架<em>软件架构蓝图</em></h1>
+      <p class="lede">基于已确认的设计文档（SPEC / ARCHITECTURE / DECISIONS ADR-0001..0017 / ROADMAP / TESTING / SECURITY），给出可落地的整体架构，以及每个组成部分的技术选型、方案设计与 TODO 清单。</p>
+      <div class="meta">
+        <span class="chip amber">2026-08-05</span>
+        <span class="chip cyan">TypeScript + Node 26</span>
+        <span class="chip cyan">SQLite + 进程内队列</span>
+        <span class="chip green">模型注册表用户管理 · 初始为空</span>
+        <span class="chip green">daemon + CLI（WebUI 后续）</span>
+      </div>
+    </header>
+
+    <!-- ================= 1 ================= -->
+    <section id="s1">
+      <h2><span class="sec-num">01</span>总体架构概览</h2>
+      <p class="sec-desc">本地单机进程架构：一个后台守护进程承载存储、队列、注册表与调度；CLI（未来 WebUI）作为客户端通过回环 HTTP 管理模型与任务。</p>
+
+      <h3>1.1 进程视图</h3>
+      <div class="arch">
+<span class="dim">┌──────────────────────────────────────────────────────────────┐</span><br>
+<span class="dim">│ 用户侧</span><br>
+<span class="hl2">│   agent CLI（交互入口）        WebUI（后续 Phase 11）</span><br>
+<span class="dim">└───────────────────────────────┬──────────────────────────────┘</span><br>
+<span class="dim">                                │ HTTP（127.0.0.1 + token）</span><br>
+<span class="dim">┌───────────────────────────────▼──────────────────────────────┐</span><br>
+<span class="hl">│ agentd（项目后台守护进程 · 单进程）</span><br>
+<span class="dim">│   Management API → Task Gateway → Router → Planner → Scheduler │</span><br>
+<span class="dim">│   Model/Agent Registry · SQLite · 队列 · Supervisor           │</span><br>
+<span class="dim">│   Worker → Agent Adapter（ACP / Process）→ Validator          │</span><br>
+<span class="dim">└───────┬──────────────────────────┬────────────────────────────┘</span><br>
+<span class="dim">        │ spawn / stdio             │ HTTP</span><br>
+<span class="dim">┌───────▼──────────┐      ┌─────────▼───────────┐</span><br>
+<span class="hl2">│ Agent Runtime    │      │ 模型 API（用户购买）│</span><br>
+<span class="dim">│ claude / opencode│      │ OpenAI 兼容 /        │</span><br>
+<span class="dim">│ codex / openclaw│      │ Responses / Anthropic│</span><br>
+<span class="dim">│ reasonix         │      └─────────────────────┘</span><br>
+<span class="dim">└──────────────────┘</span>
+      </div>
+
+      <h3>1.2 两条核心数据流</h3>
+      <div class="grid2">
+        <div>
+          <h4>任务链路（Phase 2 打通）</h4>
+          <div class="arch"><span class="dim">agent run → POST /v1/tasks</span><br>→ <span class="hl2">TaskService.submit</span>（落库 + 入队）<br>→ Router（分类 / 能力 / 成本）<br>→ Planner（单任务直通）<br>→ Scheduler（并发 ≤ 2）<br>→ Worker（Workspace 分配）<br>→ <span class="hl2">AgentAdapter.invoke</span><br>→ Runtime 调用用户添加的模型<br>→ 事件流 → usage_records<br>→ Validator（build / test / lint）<br>→ 结果回写 tasks</div>
+        </div>
+        <div>
+          <h4>模型管理链路（Phase 2 先行）</h4>
+          <div class="arch"><span class="dim">agent model add qwen3 ...</span><br>→ POST /v1/models<br>→ 校验（连接 / 计费 / 能力）<br>→ 落库 models<br>→ 审计 model_change_log<br>→ <span class="hl2">agent model list / update / remove / disable</span><br><br><span class="dim">初始注册表为空（ADR-0016）</span><br><span class="dim">运行时操作，无需重启 daemon（ADR-0017）</span></div>
+        </div>
+      </div>
+
+      <h3>1.3 技术选型总览</h3>
+      <div class="tblwrap"><table>
+        <tr><th>关注点</th><th>选型</th><th>依据</th></tr>
+        <tr><td>语言 / 运行时</td><td><code>TypeScript + Node 26</code></td><td>ADR-0006</td></tr>
+        <tr><td>包管理</td><td><code>pnpm</code></td><td>ADR-0006</td></tr>
+        <tr><td>CLI 框架</td><td><code>commander + zod</code></td><td>ADR-0008/0013</td></tr>
+        <tr><td>持久化</td><td><code>SQLite (better-sqlite3, WAL)</code></td><td>ADR-0007</td></tr>
+        <tr><td>队列</td><td><code>进程内队列（p-queue 或自研）</code></td><td>ADR-0007</td></tr>
+        <tr><td>管理 API</td><td><code>node:http · REST /v1 · loopback + token</code></td><td>ADR-0017</td></tr>
+        <tr><td>Agent 接入</td><td><code>ACP-first + Claude/Codex 进程适配器</code></td><td>ADR-0011</td></tr>
+        <tr><td>模型接入</td><td><code>不内置 · OpenAI 兼容为主 + Responses + Anthropic</code></td><td>ADR-0012/0016</td></tr>
+        <tr><td>配置</td><td><code>TOML (smol-toml)</code></td><td>ADR-0013</td></tr>
+        <tr><td>日志</td><td><code>JSONL（轻量自研）</code></td><td>ADR-0014</td></tr>
+        <tr><td>测试</td><td><code>vitest + 真实 CLI 集成测试</code></td><td>TESTING.md</td></tr>
+        <tr><td>鉴权</td><td><code>daemon token（启动生成 · 0600）</code></td><td>ADR-0017 / SECURITY</td></tr>
+      </table></div>
+    </section>
+
+    <!-- ================= 2 ================= -->
+    <section id="s2">
+      <h2><span class="sec-num">02</span>组件设计</h2>
+      <p class="sec-desc">每个组件包含：技术选型（含理由）、方案设计（关键接口 / 要点）、TODO 清单（实施顺序）。</p>
+
+      <div class="card" id="c1">
+        <div class="card-head"><span class="card-id">C1</span><span class="card-title">CLI（agent）</span><span class="chip amber">Phase 2</span><span class="card-path">src/cli/</span></div>
+        <p class="card-lead">用户交互入口，纯 daemon 客户端：不直接读 SQLite、不直接 spawn Runtime。</p>
+        <div class="grid2">
+          <div><h4>技术选型</h4>
+            <p class="kv"><b>commander</b> 声明式子命令：run / status / model / daemon</p>
+            <p class="kv"><b>zod</b> 参数校验（模型字段、价格、能力）</p>
+            <p class="kv"><b>双输出</b> 人读默认 + <code>--json</code></p>
+          </div>
+          <div><h4>方案设计</h4>
+            <div class="arch">agent run &lt;task&gt;<br>agent status [taskId]<br>agent model add / list / update / remove / disable<br>agent daemon start | stop | status<br><span class="dim">daemon 未运行 → 友好报错</span></div>
+          </div>
+        </div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">7 项</span></div>
+        <ul class="todo">
+          <li>T1 工程脚手架：pnpm init / tsconfig(NodeNext) / vitest / eslint</li>
+          <li>T2 commander 子命令骨架（run / status / model / daemon）</li>
+          <li>T3 <code>model add</code> 参数 + zod 校验（--provider --base-url --model-id --wire-api --billing --price-* --capabilities --auth-env）</li>
+          <li>T4 <code>model list / update / remove / disable</code></li>
+          <li>T5 <code>run &lt;task&gt;</code> 提交 + 轮询</li>
+          <li>T6 <code>status</code> 与 <code>--json</code> 输出</li>
+          <li>T7 daemon 未运行友好报错（ECONNREFUSED 检测）</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c2">
+        <div class="card-head"><span class="card-id">C2</span><span class="card-title">Daemon（agentd）</span><span class="chip amber">Phase 2</span><span class="card-path">src/daemon/</span></div>
+        <p class="card-lead">后台常驻进程：HTTP + SQLite + 队列 + 注册表宿主，负责所有状态与写操作（单写者模型）。</p>
+        <div class="grid2">
+          <div><h4>技术选型</h4>
+            <p class="kv"><b>node:http</b> 内置 HTTP（MVP 零依赖），手写路由</p>
+            <p class="kv"><b>pidfile + 端口检测</b> 单实例</p>
+            <p class="kv"><b>信号处理</b> SIGTERM/SIGINT 优雅关闭</p>
+            <p class="kv"><b>数据目录</b> <code>.agent-orchestrator/</code>（db / token / logs / runs）</p>
+          </div>
+          <div><h4>方案设计</h4>
+            <div class="arch">启动：加载 TOML → SQLite(migrations)<br>→ token → HTTP → 恢复中断任务<br><span class="dim">（running → interrupted）</span><br>关闭：停止取任务 → 收尾 → 关 HTTP<br><span class="hl2">崩溃恢复是 MVP 必须项</span></div>
+          </div>
+        </div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">7 项</span></div>
+        <ul class="todo">
+          <li>T1 <code>agent daemon start / stop / status</code></li>
+          <li>T2 HTTP server（loopback 绑定，端口写入 state）</li>
+          <li>T3 token 生成（crypto · base64url · 0600）</li>
+          <li>T4 SQLite 初始化 + migrations（schema_version）</li>
+          <li>T5 优雅关闭与信号处理</li>
+          <li>T6 崩溃恢复：启动时 running → interrupted</li>
+          <li>T7 单实例锁与端口冲突检测</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c3">
+        <div class="card-head"><span class="card-id">C3</span><span class="card-title">Management API</span><span class="chip amber">Phase 2</span><span class="card-path">src/daemon/http.ts</span></div>
+        <p class="card-lead">REST 风格 JSON over HTTP，路径前缀 /v1，Bearer token 鉴权，写操作全部审计。</p>
+        <div class="grid2">
+          <div><h4>技术选型</h4>
+            <p class="kv"><b>node:http</b> + 手写路由表</p>
+            <p class="kv"><b>统一错误</b> <code>{error:{code,message,details}}</code></p>
+            <p class="kv"><b>请求日志</b> 脱敏</p>
+          </div>
+          <div><h4>端点</h4>
+            <div class="tblwrap"><table>
+              <tr><th>Method</th><th>Path</th></tr>
+              <tr><td>GET</td><td><code>/v1/health</code></td></tr>
+              <tr><td>POST</td><td><code>/v1/models</code></td></tr>
+              <tr><td>GET</td><td><code>/v1/models</code> · <code>/v1/models/:id</code></td></tr>
+              <tr><td>PATCH/DELETE</td><td><code>/v1/models/:id</code></td></tr>
+              <tr><td>POST</td><td><code>/v1/models/:id/probe</code></td></tr>
+              <tr><td>POST/GET</td><td><code>/v1/tasks</code> · <code>/v1/tasks/:id</code></td></tr>
+              <tr><td>POST</td><td><code>/v1/tasks/:id/cancel</code></td></tr>
+            </table></div>
+          </div>
+        </div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">6 项</span></div>
+        <ul class="todo">
+          <li>T1 token 中间件 + 请求日志（脱敏）</li>
+          <li>T2 models CRUD 端点</li>
+          <li>T3 probe 端点（对接 C12）</li>
+          <li>T4 tasks 提交 / 查询 / 取消端点</li>
+          <li>T5 统一错误格式与 4xx/5xx 语义</li>
+          <li>T6 路由表 + 请求/响应 TS 类型</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c4">
+        <div class="card-head"><span class="card-id">C4</span><span class="card-title">Task Gateway</span><span class="chip amber">Phase 2</span><span class="card-path">src/gateway/</span></div>
+        <p class="card-lead">任务提交 / 查询 / 取消的业务服务，提交即落库并入队。</p>
+        <div class="grid2">
+          <div><h4>技术选型</h4>
+            <p class="kv"><b>纯业务服务</b>（无框架）</p>
+            <p class="kv"><b>crypto.randomUUID()</b> taskId</p>
+          </div>
+          <div><h4>方案设计</h4>
+            <div class="arch"><span class="hl2">TaskService</span> { submit, get, list, cancel }<br>submit = 分类(Router) → 落库 → 入队</div>
+          </div>
+        </div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">3 项</span></div>
+        <ul class="todo">
+          <li>T1 TaskService.submit（Router 分类 → 落库 → 入队）</li>
+          <li>T2 get / list / cancel</li>
+          <li>T3 参数校验（空 prompt 拒绝）</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c5">
+        <div class="card-head"><span class="card-id">C5</span><span class="card-title">Model Registry（用户管理）</span><span class="chip green">Phase 2 · 初始为空</span><span class="card-path">src/registry/</span></div>
+        <p class="card-lead">核心：不内置任何模型（ADR-0016），用户通过管理入口添加自己购买的模型，记录计费方式与支持能力。</p>
+        <div class="grid2">
+          <div><h4>技术选型</h4>
+            <p class="kv"><b>Service + Repository</b> 分层</p>
+            <p class="kv"><b>zod</b> 定义 ModelRecord schema</p>
+            <p class="kv"><b>凭据只存引用</b>（env 名 / 加密文件），禁止明文</p>
+          </div>
+          <div><h4>方案设计</h4>
+            <div class="arch">billing.type = free | pay-as-you-go<br>| subscription | token-plan | local<br>capabilities = context / maxOutput<br>| toolCalling / streaming / reasoning<br>| modalities<br>status = active | disabled | error<br><span class="hl2">add → active；探测失败 → error</span></div>
+          </div>
+        </div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">6 项</span></div>
+        <ul class="todo">
+          <li>T1 ModelRepository CRUD（SQLite）</li>
+          <li>T2 zod schema（billing / capabilities / wire_api）</li>
+          <li>T3 凭据引用存储（auth-env 只校验存在性）</li>
+          <li>T4 model_change_log 审计</li>
+          <li>T5 状态转换（error / disabled 语义）</li>
+          <li>T6 唯一约束（provider + modelId）</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c6">
+        <div class="card-head"><span class="card-id">C6</span><span class="card-title">Agent Registry</span><span class="chip amber">Phase 2</span><span class="card-path">src/registry/</span></div>
+        <p class="card-lead">Agent Runtime 的声明与可用性探测（which + --version），维护 Agent ↔ wire_api 兼容表。</p>
+        <div class="grid2">
+          <div><h4>技术选型</h4>
+            <p class="kv"><b>TOML [[agents]]</b> 静态声明</p>
+            <p class="kv"><b>probe</b> which / --version（TTL 缓存）</p>
+          </div>
+          <div><h4>兼容表</h4>
+            <div class="tblwrap"><table>
+              <tr><th>Agent</th><th>可用 wire_api</th></tr>
+              <tr><td>Claude Code</td><td><code>anthropic</code></td></tr>
+              <tr><td>Codex</td><td><code>responses</code></td></tr>
+              <tr><td>OpenCode / OpenClaw / Reasonix</td><td><code>openai-compatible</code> / ACP</td></tr>
+            </table></div>
+          </div>
+        </div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">4 项</span></div>
+        <ul class="todo">
+          <li>T1 读取 [[agents]] 配置声明</li>
+          <li>T2 probe（which / --version）+ 缓存</li>
+          <li>T3 可用性状态维护与刷新</li>
+          <li>T4 Agent ↔ wire_api 兼容表</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c7">
+        <div class="card-head"><span class="card-id">C7</span><span class="card-title">Router</span><span class="chip amber">Phase 2</span><span class="card-path">src/router/</span></div>
+        <p class="card-lead">任务分类（规则 + 项目特征）→ 能力过滤 → 成本排序（free-first）→ 生成 escalation tier。MVP 不引入 LLM 分类。</p>
+        <div class="grid2">
+          <div><h4>技术选型</h4>
+            <p class="kv"><b>规则引擎</b> 关键词 + package.json / CMake / Cargo 特征</p>
+            <p class="kv"><b>成本排序</b> unitPrices × 预估 tokens（ADR-0003）</p>
+          </div>
+          <div><h4>输出</h4>
+            <div class="arch"><span class="hl2">TaskProfile</span> { type, complexity,<br>requiredCapability[], candidateAgents[],<br>candidateModels[], escalationPolicy }</div>
+          </div>
+        </div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">5 项</span></div>
+        <ul class="todo">
+          <li>T1 关键词 + 项目特征分类器</li>
+          <li>T2 能力过滤（context / tool / streaming）</li>
+          <li>T3 成本排序（free-first）</li>
+          <li>T4 escalation tier 生成（flash → pro → strongest）</li>
+          <li>T5 单元测试（分类 / 排序 / 降级）</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c8">
+        <div class="card-head"><span class="card-id">C8</span><span class="card-title">Planner</span><span class="chip amber">Phase 2 · DAG Phase 4</span><span class="card-path">src/planner/</span></div>
+        <p class="card-lead">任务分解为 DAG；MVP 单任务直通，接口与数据结构按 DAG 预留。</p>
+        <div class="arch"><span class="hl2">TaskDAG</span> { root, nodes[], edges[] }<br>MVP: plan(task) → { root, nodes:[task], edges:[] }</div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">3 项</span></div>
+        <ul class="todo">
+          <li>T1 TaskDAG / TaskNode 类型</li>
+          <li>T2 单任务直通实现</li>
+          <li>T3 分解器接口预留（Phase 4）</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c9">
+        <div class="card-head"><span class="card-id">C9</span><span class="card-title">Scheduler</span><span class="chip amber">Phase 2</span><span class="card-path">src/scheduler/</span></div>
+        <p class="card-lead">进程内队列 + 并发信号量（默认 2），DAG 就绪检查 Phase 4。</p>
+        <div class="arch">pending 队列（优先级）→ 就绪检查<br>→ 信号量 → 分配 Worker（Agent + Workspace）<br>→ 执行 → 释放信号量<br><span class="dim">冲突时降级串行</span></div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">4 项</span></div>
+        <ul class="todo">
+          <li>T1 队列 + 并发信号量</li>
+          <li>T2 优先级排序</li>
+          <li>T3 Worker 分配（Agent 可用性 + Workspace）</li>
+          <li>T4 DAG 就绪检查（Phase 4）</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c10">
+        <div class="card-head"><span class="card-id">C10</span><span class="card-title">Worker</span><span class="chip amber">Phase 2</span><span class="card-path">src/worker/</span></div>
+        <p class="card-lead">单任务执行器：prep workspace → adapter.invoke → 事件消费 → usage → validator。</p>
+        <div class="arch">1. WorkspaceManager.allocate(task)<br>2. adapter = Factory.create(agent, model)<br>3. for await (event of adapter.invoke(input))<br>&nbsp;&nbsp;&nbsp;text/tool → runs/&lt;taskId&gt;/output.jsonl<br>&nbsp;&nbsp;&nbsp;usage → usage_records（provider usage × price）<br>4. ok = Validator.run(task, workspace)<br>5. 结果回写 tasks · 释放 workspace</div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">4 项</span></div>
+        <ul class="todo">
+          <li>T1 Worker 执行循环</li>
+          <li>T2 事件流落盘</li>
+          <li>T3 usage 记录</li>
+          <li>T4 workspace 分配 / 释放</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c11">
+        <div class="card-head"><span class="card-id">C11</span><span class="card-title">Agent Adapter（ACP + Process）</span><span class="chip amber">Phase 2</span><span class="card-path">src/adapters/</span></div>
+        <p class="card-lead">统一接口（ADR-0011）：ACP-first（opencode / openclaw / reasonix）+ Claude / Codex 进程适配器。</p>
+        <div class="grid2">
+          <div><h4>技术选型</h4>
+            <p class="kv"><b>ACP</b> spawn + NDJSON JSON-RPC 2.0 最小 client（手写）</p>
+            <p class="kv"><b>Claude</b> <code>-p --settings --output-format json --permission-mode</code></p>
+            <p class="kv"><b>Codex</b> <code>exec --json --sandbox -m</code></p>
+            <p class="kv"><b>硬超时</b> 必须（Claude 401 实测重试 11 次）</p>
+          </div>
+          <div><h4>接口</h4>
+            <div class="arch"><span class="hl2">AgentAdapter</span> { id, invoke(), cancel(), probe() }<br>AgentEvent = started | text | tool<br>| usage | finished | error<br><span class="dim">cost 不信任 Agent 上报（ADR-0014）</span></div>
+          </div>
+        </div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">7 项</span></div>
+        <ul class="todo">
+          <li>T1 AgentAdapter 接口 + 工厂</li>
+          <li>T2 ACP 最小 client（NDJSON JSON-RPC）</li>
+          <li>T3 Claude 进程适配器（json / 硬超时 / 权限模式）</li>
+          <li>T4 Codex 进程适配器（JSONL / sandbox）</li>
+          <li>T5 事件归一化 + 错误分类</li>
+          <li>T6 probe（版本 / 认证探测）</li>
+          <li>T7 真实 CLI 集成测试（TESTING §11 基线）</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c12">
+        <div class="card-head"><span class="card-id">C12</span><span class="card-title">Model Connector（探测）</span><span class="chip green">Phase 2 · Phase 3 增强</span><span class="card-path">src/connector/</span></div>
+        <p class="card-lead">连接探测客户端：零依赖 fetch + zod，按 wire protocol 最小请求验证认证与可达性。</p>
+        <div class="arch"><span class="hl2">probe(model)</span><br>openai-compatible → GET {baseUrl}/models<br>anthropic → POST /v1/messages（最小请求）<br>responses → POST /responses（最小请求）<br>401 → status=error + 提示用户</div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">3 项</span></div>
+        <ul class="todo">
+          <li>T1 OpenAI 兼容探测客户端</li>
+          <li>T2 Anthropic / Responses 探测（后续）</li>
+          <li>T3 错误分类（401/429/5xx/timeout）与状态回写</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c13">
+        <div class="card-head"><span class="card-id">C13</span><span class="card-title">Supervisor</span><span class="chip amber">Phase 2 基础 · Phase 6 完整</span><span class="card-path">src/supervisor/</span></div>
+        <p class="card-lead">超时 / 重试 / 升级 / 取消 / 恢复。不承担业务逻辑。</p>
+        <div class="arch">auth_error → 不重试 · 标记 error<br>agent_timeout → retry（换模型/运行时）→ escalate<br>validation_fail → retry → ask_user<br>cancel → SIGTERM → 5s → SIGKILL<br><span class="dim">升级阶梯：free → cheap → strong</span></div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">5 项</span></div>
+        <ul class="todo">
+          <li>T1 超时器（AbortController + kill）</li>
+          <li>T2 重试与指数退避</li>
+          <li>T3 升级阶梯（模型 / 运行时切换）</li>
+          <li>T4 取消语义（SIGTERM → SIGKILL）</li>
+          <li>T5 失败现场记录（raw output 保留）</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c14">
+        <div class="card-head"><span class="card-id">C14</span><span class="card-title">Validator</span><span class="chip amber">Phase 2 · Phase 7 增强</span><span class="card-path">src/validator/</span></div>
+        <p class="card-lead">客观验证：build / test / lint / diff，按任务类型映射，判定成功而非相信 Agent 自述。</p>
+        <div class="arch">refactor → build + test + lint<br>fix → build + test<br>test → test<br>review → diff 审查（人工确认）<br><span class="dim">语言探测：package.json → pnpm test · CMake → cmake --build · Cargo → cargo test</span></div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">4 项</span></div>
+        <ul class="todo">
+          <li>T1 子进程执行器（exit code + 输出捕获）</li>
+          <li>T2 type → validator 映射</li>
+          <li>T3 结构化验证结果（pass/fail + 证据）</li>
+          <li>T4 diff 审查提示（人工确认）</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c15">
+        <div class="card-head"><span class="card-id">C15</span><span class="card-title">Workspace Manager</span><span class="chip amber">Phase 2 · Phase 5 增强</span><span class="card-path">src/workspace/</span></div>
+        <p class="card-lead">混合隔离（ADR-0009）：有 git 仓库 → worktree；无 → cp -R 副本；merge 人工确认。</p>
+        <div class="arch">allocate: repo ? <span class="hl2">git worktree add</span> : cp -R<br>collectDiff: git diff / diff -ruN<br>release: 移除 worktree / 副本 · 保留 diff</div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">4 项</span></div>
+        <ul class="todo">
+          <li>T1 git worktree 创建 / 清理</li>
+          <li>T2 cp -R 副本 + 清理</li>
+          <li>T3 diff 生成与落盘</li>
+          <li>T4 merge 人工确认流程（Phase 5）</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c16">
+        <div class="card-head"><span class="card-id">C16</span><span class="card-title">Security</span><span class="chip red">Phase 2 基线</span><span class="card-path">src/security/</span></div>
+        <p class="card-lead">三层模型（ADR-0010）：Runtime 原生权限 → 审批门 → 审计日志。</p>
+        <div class="grid2">
+          <div><h4>技术选型</h4>
+            <p class="kv"><b>token</b> crypto 生成 · 0600 · loopback 绑定</p>
+            <p class="kv"><b>脱敏</b> 统一正则 key/token/secret/password/cookie</p>
+            <p class="kv"><b>凭据</b> 只存引用（env 名 / 加密文件）</p>
+          </div>
+          <div><h4>审批门</h4>
+            <div class="arch">高风险 = git:push · network<br>| workspace 外写入 · 凭据读取<br>→ CLI 交互确认 Y/N<br>→ 记录 approval.* 审计事件</div>
+          </div>
+        </div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">5 项</span></div>
+        <ul class="todo">
+          <li>T1 daemon token 生成 / 校验</li>
+          <li>T2 审批门（交互确认）</li>
+          <li>T3 脱敏工具 + 单元测试</li>
+          <li>T4 审计日志（approval.* / model.*）</li>
+          <li>T5 安全测试（TESTING §9：越权 / 命令 / 网络 / 密钥 / 逃逸）</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c17">
+        <div class="card-head"><span class="card-id">C17</span><span class="card-title">Observability</span><span class="chip amber">Phase 2 基线 · Phase 9 增强</span><span class="card-path">src/observability/</span></div>
+        <p class="card-lead">JSONL 日志 + SQLite 指标；成本 = provider usage × price（ADR-0014）。</p>
+        <div class="arch"><span class="hl2">日志事件</span> task.* · worker.* · supervisor.* · validator.* · approval.* · model.*<br><span class="hl2">metric_event</span> task.success/failure/retry · worker.latency/crash · model.error/auth_error</div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">4 项</span></div>
+        <ul class="todo">
+          <li>T1 JSONL logger（ts / level / event / payload）</li>
+          <li>T2 usage_record 写入</li>
+          <li>T3 metric_event 写入</li>
+          <li>T4 成本核算模块（provider usage × price）</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c18">
+        <div class="card-head"><span class="card-id">C18</span><span class="card-title">SQLite Store</span><span class="chip amber">Phase 2</span><span class="card-path">src/store/</span></div>
+        <p class="card-lead">better-sqlite3 + WAL + migrations；单写者模型（写集中在 daemon）。</p>
+        <div class="arch">表：tasks · agent_runtimes · models<br>· model_change_log · worker_runs<br>· usage_records · metric_events</div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">4 项</span></div>
+        <ul class="todo">
+          <li>T1 better-sqlite3 集成 + 连接封装</li>
+          <li>T2 migrations 机制（schema_version）</li>
+          <li>T3 7 张表 DDL 落地（见 §03）</li>
+          <li>T4 索引与 Repository 查询封装</li>
+        </ul>
+      </div>
+
+      <div class="card" id="c19">
+        <div class="card-head"><span class="card-id">C19</span><span class="card-title">WebUI（后续）</span><span class="chip cyan">Phase 11</span><span class="card-path">src/webui/</span></div>
+        <p class="card-lead">管理后台：复用 /v1 API，技术栈 Phase 11 评估；daemon 静态托管 dist/。</p>
+        <div class="arch">页面：模型管理（add/list/update/remove/probe）<br>· 任务面板（submit/status/result/cancel）<br>· 成本与指标面板（Phase 9）</div>
+        <div class="todo-title"><h4>TODO</h4><span class="cnt">4 项</span></div>
+        <ul class="todo">
+          <li>T1 技术选型评估（Phase 11 前置）</li>
+          <li>T2 模型管理页</li>
+          <li>T3 任务面板</li>
+          <li>T4 与 daemon 鉴权对接</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ================= 3 ================= -->
+    <section id="s3">
+      <h2><span class="sec-num">03</span>数据模型与 SQLite Schema</h2>
+      <p class="sec-desc">7 张表：tasks / agent_runtimes / models / model_change_log / worker_runs / usage_records / metric_events。模型注册表初始为空，全部写入集中在 daemon 进程。</p>
+      <div class="codewrap"><button class="copy-btn">copy</button><pre><span class="c">-- WAL 模式，单写者模型</span>
+PRAGMA journal_mode = WAL;
+
+CREATE TABLE tasks (
+  id             TEXT PRIMARY KEY,
+  parent_id      TEXT,
+  dag_group      TEXT,
+  type           TEXT NOT NULL,
+  prompt         TEXT NOT NULL,
+  status         TEXT NOT NULL,
+  agent_id       TEXT,
+  model_id       TEXT,
+  workspace_id   TEXT,
+  priority       INTEGER NOT NULL DEFAULT 0,
+  retry_count    INTEGER NOT NULL DEFAULT 0,
+  created_at     INTEGER NOT NULL,
+  updated_at     INTEGER NOT NULL,
+  started_at     INTEGER,
+  finished_at    INTEGER,
+  result_summary TEXT
+);
+CREATE INDEX idx_tasks_status ON tasks(status);
+
+CREATE TABLE models (
+  id           TEXT PRIMARY KEY,
+  name         TEXT NOT NULL,
+  provider     TEXT NOT NULL,
+  model_id     TEXT NOT NULL,
+  wire_api     TEXT NOT NULL,
+  base_url     TEXT NOT NULL,
+  auth_ref     TEXT,
+  billing      TEXT NOT NULL,      <span class="c">-- json</span>
+  capabilities TEXT NOT NULL,      <span class="c">-- json</span>
+  status       TEXT NOT NULL DEFAULT 'active',
+  created_at   INTEGER NOT NULL,
+  updated_at   INTEGER NOT NULL,
+  added_by     TEXT
+);
+CREATE UNIQUE INDEX idx_models_provider_model ON models(provider, model_id);
+
+CREATE TABLE model_change_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  model_id   TEXT NOT NULL,
+  action     TEXT NOT NULL,
+  payload    TEXT,
+  actor      TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE usage_records (
+  id                 TEXT PRIMARY KEY,
+  run_id             TEXT NOT NULL,
+  provider           TEXT,
+  model              TEXT,
+  input_tokens       INTEGER DEFAULT 0,
+  output_tokens      INTEGER DEFAULT 0,
+  cache_read_tokens  INTEGER DEFAULT 0,
+  cache_write_tokens INTEGER DEFAULT 0,
+  reasoning_tokens   INTEGER DEFAULT 0,
+  latency_ms         INTEGER,
+  cost_usd           REAL,
+  source             TEXT NOT NULL DEFAULT 'provider'
+);
+<span class="c">-- agent_runtimes / worker_runs / metric_events 结构见 Markdown 版</span></pre></div>
+    </section>
+
+    <!-- ================= 4 ================= -->
+    <section id="s4">
+      <h2><span class="sec-num">04</span>任务状态机与错误处理</h2>
+      <div class="flow">
+        <span class="flow-node">created</span><span class="flow-arrow">→</span>
+        <span class="flow-node">queued</span><span class="flow-arrow">→</span>
+        <span class="flow-node cyan">running</span><span class="flow-arrow">→</span>
+        <span class="flow-node green">succeeded</span>
+      </div>
+      <div class="flow">
+        <span class="flow-node cyan">running</span><span class="flow-arrow">→</span>
+        <span class="flow-node red">failed</span><span class="flow-arrow">→</span>
+        <span class="flow-node amber">retrying</span><span class="flow-arrow">→</span>
+        <span class="flow-node">queued</span>
+      </div>
+      <div class="flow">
+        <span class="flow-node cyan">running</span><span class="flow-arrow">→</span>
+        <span class="flow-node red">timed_out</span><span class="flow-arrow">→</span>
+        <span class="flow-node amber">escalation</span><span class="flow-arrow">→</span>
+        <span class="flow-node">queued</span>
+      </div>
+      <div class="flow">
+        <span class="flow-node cyan">running</span><span class="flow-arrow">→</span>
+        <span class="flow-node red">cancelled</span>
+        <span class="flow-arrow">&nbsp;</span>
+        <span class="flow-node cyan">running</span><span class="flow-arrow">→</span>
+        <span class="flow-node red">validation_failed</span><span class="flow-arrow">→</span>
+        <span class="flow-node amber">retry | escalate | ask_user</span>
+      </div>
+      <div class="tblwrap"><table>
+        <tr><th>错误类别</th><th>触发</th><th>默认处理</th></tr>
+        <tr><td><code>auth_error</code></td><td>401 / key 失效</td><td>不重试 · 标记 error · 提示用户</td></tr>
+        <tr><td><code>agent_timeout</code></td><td>超过程序级超时</td><td>retry → escalate</td></tr>
+        <tr><td><code>agent_crash</code></td><td>进程异常退出</td><td>retry → escalate</td></tr>
+        <tr><td><code>agent_cli_failure</code></td><td>非零退出且无结构化结果</td><td>retry → ask_user</td></tr>
+        <tr><td><code>model_error</code></td><td>API 错误 / rate limit</td><td>retry（退避）→ escalate</td></tr>
+        <tr><td><code>validation_failure</code></td><td>Validator 判定失败</td><td>retry → ask_user</td></tr>
+        <tr><td><code>workspace_conflict</code></td><td>git / 文件冲突</td><td>ask_user</td></tr>
+      </table></div>
+    </section>
+
+    <!-- ================= 5 ================= -->
+    <section id="s5">
+      <h2><span class="sec-num">05</span>安全设计</h2>
+      <div class="flow">
+        <span class="flow-node amber">L1 Runtime 原生权限</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node amber">L2 Orchestrator 审批门</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-node amber">L3 审计日志</span>
+      </div>
+      <div class="grid3">
+        <div class="arch"><span class="hl2">Runtime 原生</span><br>claude --permission-mode<br>codex --sandbox<br>opencode allow/deny<br>reasonix shellAllowed<br>openclaw approvals</div>
+        <div class="arch"><span class="hl2">审批门</span><br>git:push · network<br>workspace 外写入 · 凭据读取<br>→ CLI 交互确认 Y/N<br>→ approval.* 审计事件</div>
+        <div class="arch"><span class="hl2">凭据与审计</span><br>模型凭据只存引用<br>日志统一脱敏<br>model_change_log 记录变更<br>API 仅 loopback + token</div>
+      </div>
+    </section>
+
+    <!-- ================= 6 ================= -->
+    <section id="s6">
+      <h2><span class="sec-num">06</span>可观测性</h2>
+      <div class="grid2">
+        <div>
+          <h4>日志（JSONL）</h4>
+          <div class="codewrap"><button class="copy-btn">copy</button><pre>{"ts":1785769306306,"level":"info","event":"task.started","taskId":"t_01","runId":"r_01","workerId":"w_01","payload":{}}</pre></div>
+          <p class="kv">事件域：<b>task.*</b> <b>worker.*</b> <b>supervisor.*</b> <b>validator.*</b> <b>approval.*</b> <b>model.*</b></p>
+        </div>
+        <div>
+          <h4>指标（SQLite）</h4>
+          <p class="kv"><b>usage_records</b> 成本 / token / 延迟（source=provider，权威）</p>
+          <p class="kv"><b>metric_events</b> 成功率 / 失败率 / 重试率 / 模型表现 / Agent 表现</p>
+          <p class="kv"><b>成本核算</b> cost = usage × unit_price，不信任 Agent 上报（ADR-0014）</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 7 ================= -->
+    <section id="s7">
+      <h2><span class="sec-num">07</span>配置（TOML）</h2>
+      <div class="codewrap"><button class="copy-btn">copy</button><pre><span class="c"># 示例配置。模型注册表为空，本文件不含任何模型接入配置</span>
+[orchestrator]
+concurrency = 2
+default_timeout_sec = 300
+default_retries = 1
+
+[router]
+free_first = true
+escalation = ["flash", "pro", "strongest"]
+
+[workspace]
+mode = "hybrid"   <span class="c"># worktree | copy</span>
+
+[approvals]
+require_human = ["git:push", "network", "fs:write-outside-workspace"]
+
+[[agents]]
+id = "claude-code"
+settings = "~/.claude/settings-deepseek.json"
+permission_mode = "plan"
+
+[[agents]]
+id = "codex"
+sandbox = "workspace-write"
+
+[[agents]]
+id = "opencode"
+<span class="c"># model = "&lt;已注册模型 id&gt;"</span>
+
+[[agents]]
+id = "reasonix"
+budget = 1</pre></div>
+    </section>
+
+    <!-- ================= 8 ================= -->
+    <section id="s8">
+      <h2><span class="sec-num">08</span>目录结构</h2>
+      <div class="codewrap"><button class="copy-btn">copy</button><pre>agent-orchestrator/
+├── src/
+│   ├── cli/            <span class="c"># run / status / model / daemon（daemon 客户端）</span>
+│   ├── daemon/         <span class="c"># HTTP · 生命周期 · 宿主</span>
+│   ├── webui/          <span class="c"># 管理后台（后续）</span>
+│   ├── gateway/        <span class="c"># Task Gateway</span>
+│   ├── router/
+│   ├── planner/
+│   ├── scheduler/
+│   ├── worker/
+│   ├── supervisor/
+│   ├── validator/
+│   ├── adapters/       <span class="c"># acp/ claude/ codex/ + 工厂</span>
+│   ├── connector/      <span class="c"># Model Connector（探测）</span>
+│   ├── workspace/
+│   ├── registry/       <span class="c"># Model / Agent Registry</span>
+│   ├── store/          <span class="c"># SQLite + migrations</span>
+│   ├── security/       <span class="c"># token / 审批门 / 脱敏</span>
+│   └── observability/  <span class="c"># JSONL / 指标</span>
+├── config/             <span class="c"># 默认 TOML</span>
+├── docs/
+├── test/
+└── package.json</pre></div>
+      <p class="kv"><b>运行时数据</b> <code>.agent-orchestrator/</code>（daemon.db · daemon.token · logs/ · runs/ · ws/），已在 .gitignore</p>
+    </section>
+
+    <!-- ================= 9 ================= -->
+    <section id="s9">
+      <h2><span class="sec-num">09</span>测试策略</h2>
+      <div class="grid3">
+        <div class="arch"><span class="hl2">单元</span><br>Router 分类 / 成本排序<br>Registry CRUD / 脱敏 / 状态机</div>
+        <div class="arch"><span class="hl2">集成</span><br>Gateway→Registry→Scheduler→Worker<br>Adapter→Runtime（真实 CLI）</div>
+        <div class="arch"><span class="hl2">E2E</span><br>model add → run → validator → result</div>
+      </div>
+      <div class="grid3">
+        <div class="arch"><span class="hl2">失败</span><br>crash / timeout / 401<br>rate limit / build fail</div>
+        <div class="arch"><span class="hl2">安全</span><br>越权文件 / 命令 / 网络<br>密钥泄露 / workspace 逃逸</div>
+        <div class="arch"><span class="hl2">性能</span><br>吞吐 / 并发 / 延迟<br>token / 成本</div>
+      </div>
+      <p class="kv">真实 CLI 基线见 TESTING.md §11（5/5 Runtime 已实测）。</p>
+    </section>
+
+    <!-- ================= 10 ================= -->
+    <section id="s10">
+      <h2><span class="sec-num">10</span>Roadmap 映射</h2>
+      <div class="tblwrap"><table>
+        <tr><th>组件</th><th>主要落地阶段</th></tr>
+        <tr><td>CLI / Daemon / Management API / Task Gateway / Model Registry / SQLite Store</td><td><code>Phase 2 (MVP)</code></td></tr>
+        <tr><td>Router（基础）/ Planner（直通）/ Scheduler（基础）/ Worker / Agent Adapter</td><td><code>Phase 2</code></td></tr>
+        <tr><td>Validator（build/test/lint）</td><td><code>Phase 2 → 7</code></td></tr>
+        <tr><td>Workspace Manager（基础隔离）</td><td><code>Phase 2 → 5</code></td></tr>
+        <tr><td>Security / Observability（基线）</td><td><code>Phase 2 → 9</code></td></tr>
+        <tr><td>Agent Registry 增强 / 连接探测 / 状态标记</td><td><code>Phase 3</code></td></tr>
+        <tr><td>Planner DAG / 分解器</td><td><code>Phase 4</code></td></tr>
+        <tr><td>并行 Worker / 并发调度 / 完整隔离</td><td><code>Phase 5</code></td></tr>
+        <tr><td>Supervisor 完整策略</td><td><code>Phase 6</code></td></tr>
+        <tr><td>成本感知路由 / 模型排行</td><td><code>Phase 8</code></td></tr>
+        <tr><td>指标面板 / 自适应路由</td><td><code>Phase 9 / 10</code></td></tr>
+        <tr><td>WebUI 管理后台</td><td><code>Phase 11</code></td></tr>
+      </table></div>
+    </section>
+
+    <!-- ================= 11 ================= -->
+    <section id="s11">
+      <h2><span class="sec-num">11</span>风险与开放问题</h2>
+      <div class="tblwrap"><table>
+        <tr><th>风险 / 问题</th><th>影响</th><th>缓解</th></tr>
+        <tr><td>MIMO token-plan key 失效（实测 401）</td><td>Claude+MIMO 链路不可用</td><td>注册表用户管理 · 探测标记 error · 提示刷新</td></tr>
+        <tr><td>Claude 对 3P 模型成本估算失真（25K tokens 报 $0.127）</td><td>预算误判</td><td>成本以 provider usage × price 为准（ADR-0014）</td></tr>
+        <tr><td>ACP 生态未成熟</td><td>适配器工作量不确定</td><td>手写最小 NDJSON client + 集成测试兜底</td></tr>
+        <tr><td>daemon 崩溃导致任务悬挂</td><td>状态不一致</td><td>启动恢复：running → interrupted</td></tr>
+        <tr><td>并发写 SQLite</td><td>锁竞争</td><td>单写者模型 + WAL</td></tr>
+        <tr><td>WebUI 技术栈未定</td><td>Phase 11 范围</td><td>复用 /v1 API，前端可随时替换</td></tr>
+      </table></div>
+    </section>
+
+    <footer>
+      <span>Agent Orchestrator · Architecture Blueprint v0.1.0</span>
+      <span>|</span>
+      <span>来源：<a href="ARCHITECTURE-DESIGN.md">docs/ARCHITECTURE-DESIGN.md</a></span>
+      <span>|</span>
+      <span>决策：DECISIONS.md ADR-0001..0017</span>
+    </footer>
+  </main>
+</div>
+
+<script>
+// scroll progress
+const bar = document.getElementById('progress');
+const onScroll = () => {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+};
+addEventListener('scroll', onScroll, { passive: true });
+onScroll();
+
+// scrollspy
+const tocLinks = [...document.querySelectorAll('.toc a')];
+const sections = tocLinks.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const spy = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      tocLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+    }
+  });
+}, { rootMargin: '-15% 0px -70% 0px' });
+sections.forEach(s => spy.observe(s));
+
+// copy buttons
+document.querySelectorAll('.copy-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const code = btn.parentElement.querySelector('pre');
+    const text = code.innerText.replace(/\n$/, '');
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = 'copied ✓';
+    } catch {
+      btn.textContent = 'copy failed';
+    }
+    setTimeout(() => (btn.textContent = 'copy'), 1600);
+  });
+});
+</script>
+</body>
+</html>
