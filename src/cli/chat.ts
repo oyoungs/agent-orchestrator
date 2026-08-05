@@ -1,6 +1,7 @@
 import { createInterface } from "node:readline";
 import type { DaemonClient } from "./client.ts";
 import { sleep } from "./client.ts";
+import { MarkdownStream, renderMarkdown } from "./markdown.ts";
 import { Spinner } from "./spinner.ts";
 
 const TERMINAL = new Set(["succeeded", "failed", "validation_failed", "cancelled", "timed_out"]);
@@ -88,6 +89,7 @@ async function runTurn(
   console.log(`· 任务 ${task.id.slice(0, 8)} 已提交${task.status === "analyzing" ? "，免费模型分析中…" : ""}`);
 
   const spinner = new Spinner();
+  let mdStream: MarkdownStream | null = null;
   let printed = 0;
   let analysisShown = false;
   let routingShown = false;
@@ -122,7 +124,12 @@ async function runTurn(
         if (ev.type === "text" && ev.text) {
           if (!sawText) spinner.stop();
           sawText = true;
-          console.log(String(ev.text));
+          if (process.stdout.isTTY) {
+            mdStream ??= new MarkdownStream();
+            mdStream.append(String(ev.text));
+          } else {
+            console.log(String(ev.text));
+          }
         } else if (ev.type === "tool") {
           spinner.stop();
           console.log(`  [工具] ${String(ev.tool)}`);
@@ -135,6 +142,7 @@ async function runTurn(
     }
     if (TERMINAL.has(current.status)) {
       spinner.stop();
+      mdStream?.finish();
       printChatResult(current);
       console.log("（输入下一条消息继续追加对话，/help 查看历史与管理命令）");
       return current.id;
@@ -214,7 +222,14 @@ async function handleCommand(
 
 function printChatResult(t: any): void {
   const result = agentResultOf(t);
-  if (result) console.log(`结果：${result.slice(0, 800)}`);
+  if (result) {
+    if (process.stdout.isTTY) {
+      console.log("结果：");
+      console.log(renderMarkdown(result));
+    } else {
+      console.log(`结果：${result.slice(0, 800)}`);
+    }
+  }
   if (t.resultSummary) {
     try {
       const summary = JSON.parse(t.resultSummary);
