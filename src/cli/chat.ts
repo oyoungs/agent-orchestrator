@@ -10,6 +10,11 @@ export interface ChatOptions {
   resumeTaskId?: string;
 }
 
+export function formatContextSize(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return `${n}B`;
+}
+
 interface ResolvedSession {
   sessionId: string;
   session: { id: string; title: string | null; taskCount?: number };
@@ -45,6 +50,25 @@ export async function chat(client: DaemonClient, opts: ChatOptions = {}): Promis
   let activeSessionId: string | undefined;
   let lastTaskId: string | undefined;
   let preferredModelId: string | undefined;
+  let contextLimit = 12_000;
+  try {
+    const meta = await client.request("GET", "/v1/meta");
+    contextLimit = Number(meta.sessionContextChars) || contextLimit;
+  } catch {
+    // 保持默认
+  }
+  const refreshPrompt = async (): Promise<void> => {
+    let used = 0;
+    if (activeSessionId) {
+      try {
+        const res = await client.request("GET", `/v1/sessions/${activeSessionId}`);
+        used = String(res.session.context ?? "").length;
+      } catch {
+        // 会话可能刚被删除
+      }
+    }
+    rl.setPrompt(`你(${formatContextSize(used)}/${formatContextSize(contextLimit)})> `);
+  };
 
   console.log("Agent Orchestrator 交互模式 — 输入任务描述，Ctrl+C 或 /quit 退出");
   if (opts.resumeTaskId) {
@@ -61,6 +85,7 @@ export async function chat(client: DaemonClient, opts: ChatOptions = {}): Promis
   }
 
   while (true) {
+    await refreshPrompt();
     if (process.stdin.isTTY && !inputClosed) rl.prompt();
     const line = await nextInput();
     if (line === null) break;

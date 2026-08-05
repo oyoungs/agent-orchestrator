@@ -14,6 +14,7 @@ export interface ServerContext {
   taskService: TaskService;
   logger: Logger;
   stateDir: string;
+  sessionContextChars: number;
   onShutdown: () => void;
 }
 
@@ -56,6 +57,9 @@ async function handle(ctx: ServerContext, req: IncomingMessage, res: ServerRespo
       sendJson(res, 200, { ok: true });
       setTimeout(() => ctx.onShutdown(), 50);
       return;
+    }
+    if (resource === "meta") {
+      return sendJson(res, 200, { sessionContextChars: ctx.sessionContextChars });
     }
     if (resource === "models") return await handleModels(ctx, req, res, id, sub);
     if (resource === "tasks") return await handleTasks(ctx, req, res, id, sub, url.searchParams);
@@ -171,7 +175,11 @@ async function handleSessions(
   }
   if (id) {
     const session = ctx.taskService.getSession(id);
-    return sendJson(res, 200, { session, tasks: ctx.taskService.sessionTasks(id) });
+    return sendJson(res, 200, {
+      session,
+      tasks: ctx.taskService.sessionTasks(id),
+      contextLimit: ctx.sessionContextChars,
+    });
   }
   return sendJson(res, 200, ctx.taskService.listSessions());
 }
