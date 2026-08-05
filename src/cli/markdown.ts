@@ -47,10 +47,17 @@ function stripAnsi(text: string): string {
 }
 
 export function renderMarkdown(text: string): string {
-  const tokens = lexer(text, { gfm: true, breaks: true });
+  const tokens = lexer(prepareMarkdown(text), { gfm: true, breaks: true });
   const blocks = tokens.map((t) => renderBlock(t, 0)).filter((b) => b !== "");
   const body = blocks.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
   return body ? `${body}\n` : "";
+}
+
+/** 宽容预处理：模型常输出转义（\\*\\*）或带空格（** xx **）的强调语法，统一转为标准形式 */
+function prepareMarkdown(text: string): string {
+  return text
+    .replace(/\\([*_#`~>|])/g, "$1")
+    .replace(/(\*\*)[ \t]+([^*\n]+?)[ \t]+(\*\*)/g, "**$2**");
 }
 
 function renderBlock(token: Token, indent: number): string {

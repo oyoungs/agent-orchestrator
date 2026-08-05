@@ -19,6 +19,18 @@ describe("markdown renderer", () => {
     expect(out).not.toContain("`");
   });
 
+  it("leniently renders bold with inner spaces", () => {
+    const out = renderMarkdown("** 加粗文字 **");
+    expect(out).toContain("\x1b[1m加粗文字\x1b[0m");
+    expect(out).not.toContain("**");
+  });
+
+  it("renders backslash-escaped bold from models", () => {
+    const out = renderMarkdown(String.raw`\*\*加粗文字\*\*`);
+    expect(out).toContain("\x1b[1m加粗文字\x1b[0m");
+    expect(out).not.toContain("**");
+  });
+
   it("renders fenced code blocks", () => {
     const out = renderMarkdown("```ts\nlet x = 1;\n```");
     expect(out).toContain("let x = 1;");

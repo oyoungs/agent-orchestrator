@@ -1,6 +1,7 @@
 import type { DaemonClient } from "./client.ts";
 import { sleep } from "./client.ts";
 import { Spinner } from "./spinner.ts";
+import { MarkdownStream, renderMarkdown } from "./markdown.ts";
 
 const TERMINAL = new Set(["succeeded", "failed", "validation_failed", "cancelled", "timed_out"]);
 
@@ -8,6 +9,7 @@ export async function runTask(client: DaemonClient, prompt: string): Promise<voi
   const task = await client.request("POST", "/v1/tasks", { prompt });
   console.log(`task ${task.id} submitted · type=${task.type}${task.status === "analyzing" ? " · analyzing" : ""}`);
   const spinner = new Spinner();
+  let mdStream: MarkdownStream | null = null;
   let printed = 0;
   let analysisShown = false;
   let routingShown = false;
@@ -41,7 +43,12 @@ export async function runTask(client: DaemonClient, prompt: string): Promise<voi
         if (ev.type === "text" && ev.text) {
           if (!sawText) spinner.stop();
           sawText = true;
-          console.log(`  ${String(ev.text)}`);
+          if (process.stdout.isTTY) {
+            mdStream ??= new MarkdownStream();
+            mdStream.append(String(ev.text));
+          } else {
+            console.log(`  ${String(ev.text)}`);
+          }
         } else if (ev.type === "tool") {
           spinner.stop();
           console.log(`  [tool] ${String(ev.tool)}`);
@@ -54,6 +61,7 @@ export async function runTask(client: DaemonClient, prompt: string): Promise<voi
     }
     if (TERMINAL.has(current.status)) {
       spinner.stop();
+      mdStream?.finish();
       printTask(current);
       process.exitCode = current.status === "succeeded" ? 0 : 1;
       return;
@@ -101,7 +109,12 @@ function printTask(t: any): void {
   try {
     const summary = JSON.parse(t.resultSummary);
     if (summary.agentResult !== undefined && summary.agentResult !== null) {
-      console.log(`  result: ${String(summary.agentResult).slice(0, 500)}`);
+      if (process.stdout.isTTY) {
+        console.log("  result:");
+        console.log(renderMarkdown(String(summary.agentResult)));
+      } else {
+        console.log(`  result: ${String(summary.agentResult).slice(0, 500)}`);
+      }
     }
     if (summary.validation?.checks) {
       for (const c of summary.validation.checks) {
