@@ -202,6 +202,7 @@ async function handleCommand(
       console.log(`命令列表：
   /help            帮助
   /history         当前会话任务队列
+  /context         查看当前会话自动维护的上下文
   /sessions        列出历史会话/项目
   /resume <id>     恢复历史会话/项目（session 或 task id）
   /tasks           最近任务列表
@@ -239,6 +240,22 @@ async function handleCommand(
         const result = agentResultOf(t);
         console.log(`  [${t.type} · ${t.status}] ${String(t.prompt).slice(0, 100)}${result ? `\n    → ${result.slice(0, 150)}` : ""}`);
       }
+      break;
+    }
+    case "/context": {
+      const sessionId = getSession();
+      if (!sessionId) {
+        console.log("当前还没有会话");
+        break;
+      }
+      const res = await client.request("GET", `/v1/sessions/${sessionId}`);
+      const ctx = String(res.session.context ?? "");
+      if (!ctx) {
+        console.log("当前会话还没有上下文（完成一轮任务后自动累积）");
+        break;
+      }
+      console.log(`当前会话上下文（${ctx.length} 字符）：`);
+      console.log(ctx);
       break;
     }
     case "/sessions": {

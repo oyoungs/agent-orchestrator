@@ -85,6 +85,7 @@ export interface Session {
   createdAt: number;
   updatedAt: number;
   taskCount?: number;
+  context?: string;
 }
 
 export interface UsageRecord {
@@ -117,6 +118,7 @@ export interface AppConfig {
     concurrency: number;
     defaultTimeoutSec: number;
     defaultRetries: number;
+    sessionContextChars: number;
   };
   daemon: {
     host: string;

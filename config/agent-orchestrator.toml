@@ -5,6 +5,7 @@
 concurrency = 2
 default_timeout_sec = 300
 default_retries = 1
+session_context_chars = 12000
 
 [daemon]
 host = "127.0.0.1"

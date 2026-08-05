@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { Session, Task } from "../types.ts";
+import { appendTurn as appendTurnToContext, DEFAULT_SESSION_CONTEXT_LIMIT } from "../context/sessionContext.ts";
 
 interface SessionRow {
   id: string;
@@ -7,6 +8,7 @@ interface SessionRow {
   created_at: number;
   updated_at: number;
   task_count?: number;
+  context?: string | null;
 }
 
 function rowToSession(row: SessionRow): Session {
@@ -16,6 +18,7 @@ function rowToSession(row: SessionRow): Session {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     taskCount: row.task_count,
+    context: row.context ?? undefined,
   };
 }
 
@@ -57,6 +60,19 @@ export class SessionRepo {
       .prepare("SELECT * FROM tasks WHERE session_key = ? ORDER BY created_at ASC")
       .all(sessionId) as unknown as Array<Record<string, unknown>>;
     return rows.map((row) => this.taskFromRow(row));
+  }
+
+  getContext(sessionId: string): string {
+    const row = this.db.prepare("SELECT context FROM sessions WHERE id = ?").get(sessionId) as
+      | { context: string | null }
+      | undefined;
+    return row?.context ?? "";
+  }
+
+  /** 把一轮「输入+输出」追加进会话上下文（自动截断，保留最新） */
+  appendTurn(sessionId: string, prompt: string, result: string, limit = DEFAULT_SESSION_CONTEXT_LIMIT): void {
+    const next = appendTurnToContext(this.getContext(sessionId), prompt, result, limit);
+    this.db.prepare("UPDATE sessions SET context = ?, updated_at = ? WHERE id = ?").run(next, Date.now(), sessionId);
   }
 
   private taskFromRow(row: Record<string, unknown>): Task {

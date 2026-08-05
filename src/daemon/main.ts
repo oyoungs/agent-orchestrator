@@ -32,7 +32,7 @@ const workspace = new WorkspaceManager(PROJECT_ROOT, stateDir);
 const adapters = new AdapterFactory(config.agents);
 const validator = new Validator();
 
-const deps: WorkerDeps = { taskRepo, registry, workspace, adapters, validator, logger, config, stateDir };
+const deps: WorkerDeps = { taskRepo, registry, sessions: sessionRepo, workspace, adapters, validator, logger, config, stateDir };
 const scheduler = new Scheduler(config.orchestrator.concurrency, (task) => executeTask(deps, task));
 const taskService = new TaskService(taskRepo, router, registry, scheduler, sessionRepo);
 

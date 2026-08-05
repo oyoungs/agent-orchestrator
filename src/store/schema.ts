@@ -135,4 +135,10 @@ WHERE t1.session_key IS NOT NULL
 GROUP BY t1.session_key;
 `,
   },
+  {
+    version: 4,
+    sql: `
+ALTER TABLE sessions ADD COLUMN context TEXT NOT NULL DEFAULT '';
+`,
+  },
 ];

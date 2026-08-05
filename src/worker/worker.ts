@@ -3,8 +3,10 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { AdapterFactory } from "../adapters/factory.ts";
 import type { AdapterUsage, AgentTaskInput } from "../adapters/types.ts";
+import { buildContextPrompt } from "../context/sessionContext.ts";
 import type { Logger } from "../observability/logger.ts";
 import { ModelRegistry } from "../registry/modelRegistry.ts";
+import type { SessionRepo } from "../store/sessionRepo.ts";
 import { TaskRepo } from "../store/taskRepo.ts";
 import type { AppConfig, ModelRecord, Task, UsageRecord } from "../types.ts";
 import { Validator } from "../validator/validator.ts";
@@ -21,6 +23,7 @@ export class WorkerFailure extends Error {
 export interface WorkerDeps {
   taskRepo: TaskRepo;
   registry: ModelRegistry;
+  sessions: SessionRepo;
   workspace: WorkspaceManager;
   adapters: AdapterFactory;
   validator: Validator;
@@ -57,7 +60,10 @@ export async function executeTask(deps: WorkerDeps, task: Task): Promise<void> {
     const outputFile = join(outputDir, "output.jsonl");
 
     const adapter = deps.adapters.pick(model);
-    const context = await buildContext(deps, task);
+    const sessionContext = task.sessionKey ? deps.sessions.getContext(task.sessionKey) : "";
+    const context =
+      buildContextPrompt(sessionContext, deps.config.orchestrator.sessionContextChars) ??
+      (await buildChainContext(deps, task));
     const input: AgentTaskInput = {
       prompt: task.prompt,
       context,
@@ -79,6 +85,15 @@ export async function executeTask(deps: WorkerDeps, task: Task): Promise<void> {
       } else if (event.type === "error") {
         throw new WorkerFailure(event.message, event.errorClass);
       }
+    }
+    if (lastAgentResult && task.sessionKey) {
+      deps.sessions.appendTurn(
+        task.sessionKey,
+        task.prompt,
+        lastAgentResult,
+        deps.config.orchestrator.sessionContextChars,
+      );
+      deps.logger.info("session.context_updated", { taskId: task.id, sessionId: task.sessionKey });
     }
 
     const validation = await deps.validator.run(task.type, ws);
@@ -106,7 +121,7 @@ export async function executeTask(deps: WorkerDeps, task: Task): Promise<void> {
 }
 
 /** 会话续接：把父任务链（最多 5 轮）的提问与结果作为上下文 */
-async function buildContext(deps: WorkerDeps, task: Task, maxTurns = 5): Promise<string | undefined> {
+async function buildChainContext(deps: WorkerDeps, task: Task, maxTurns = 5): Promise<string | undefined> {
   const turns: Array<{ prompt: string; result?: string }> = [];
   let current: Task | undefined = task.parentId ? deps.taskRepo.get(task.parentId) : undefined;
   while (current && turns.length < maxTurns) {
