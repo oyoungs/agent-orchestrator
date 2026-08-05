@@ -142,7 +142,8 @@ function printSessionBanner(resolved: ResolvedSession): void {
   console.log(`📁 会话/项目 ${resolved.sessionId}`);
   console.log(`   标题：${resolved.session.title ?? "-"} · 任务数：${resolved.tasks.length}`);
   for (const t of resolved.tasks) {
-    console.log(`   [${t.type} · ${t.status}] ${String(t.prompt).slice(0, 80)}`);
+    const result = agentResultOf(t);
+    console.log(`   [${t.type} · ${t.status}] ${String(t.prompt).slice(0, 80)}${result ? `\n      → ${result.slice(0, 120)}` : ""}`);
   }
 }
 
@@ -233,6 +234,7 @@ async function handleCommand(
       console.log(`命令列表：
   /help            帮助
   /history         当前会话任务队列
+  /show <n|id>     查看会话中某个任务的完整输出（序号或 task id）
   /context         查看当前会话自动维护的上下文
   /sessions        列出历史会话/项目
   /resume <id>     恢复历史会话/项目（session 或 task id）
@@ -271,6 +273,33 @@ async function handleCommand(
         const result = agentResultOf(t);
         console.log(`  [${t.type} · ${t.status}] ${String(t.prompt).slice(0, 100)}${result ? `\n    → ${result.slice(0, 150)}` : ""}`);
       }
+      break;
+    }
+    case "/show": {
+      if (!arg) {
+        console.log("用法：/show <任务序号 或 task-id>（/history 或 /resume 查看序号）");
+        break;
+      }
+      const sessionId = getSession();
+      let task: any;
+      if (sessionId && /^\d+$/.test(arg)) {
+        const res = await client.request("GET", `/v1/sessions/${sessionId}`);
+        const idx = Number(arg) - 1;
+        const found = res.tasks[idx];
+        if (!found) {
+          console.log(`任务序号 ${arg} 超出范围（共 ${res.tasks.length} 个任务）`);
+          break;
+        }
+        task = found;
+      } else {
+        try {
+          task = await client.request("GET", `/v1/tasks/${arg}`);
+        } catch {
+          console.log(`任务 ${arg} 不存在`);
+          break;
+        }
+      }
+      printTaskDetail(task);
       break;
     }
     case "/context": {
@@ -353,6 +382,40 @@ function printChatResult(t: any): void {
         const failed = validation.checks.filter((c: any) => !c.ok);
         if (failed.length === 0) console.log("验证：全部通过");
         else for (const c of failed) console.log(`验证失败：${c.name}${c.output ? ` — ${String(c.output).slice(0, 120)}` : ""}`);
+      }
+    } catch {
+      // 忽略
+    }
+  }
+}
+
+function printTaskDetail(t: any): void {
+  console.log(`任务 ${t.id} · ${t.type} · ${t.status} · 模型 ${t.modelId ?? "-"}`);
+  console.log(`提示词：${String(t.prompt).slice(0, 300)}`);
+  if (t.routingInfo) {
+    try {
+      const info = JSON.parse(t.routingInfo) as { source?: string; model?: string };
+      console.log(`路由：${info.source ?? "-"} → ${info.model ?? "-"}`);
+    } catch {
+      // 忽略
+    }
+  }
+  const result = agentResultOf(t);
+  if (result) {
+    console.log("输出：");
+    if (process.stdout.isTTY) console.log(renderMarkdown(result));
+    else console.log(result.slice(0, 2000));
+  } else {
+    console.log("（该任务没有输出结果）");
+  }
+  if (t.resultSummary) {
+    try {
+      const summary = JSON.parse(t.resultSummary);
+      const validation = summary.validation ?? summary;
+      if (validation.checks?.length) {
+        for (const c of validation.checks) {
+          console.log(`  验证 ${c.name}: ${c.ok ? "PASS" : "FAIL"}${c.output ? ` — ${String(c.output).slice(0, 120)}` : ""}`);
+        }
       }
     } catch {
       // 忽略
