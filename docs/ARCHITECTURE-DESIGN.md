@@ -77,7 +77,7 @@ agent model add qwen3 ...
 | 语言 / 运行时 | TypeScript + Node.js 26 | ADR-0006（Node 生态，流式 JSON 友好） |
 | 包管理 | pnpm | ADR-0006 |
 | CLI 框架 | commander + zod 参数校验 | ADR-0008 / ADR-0013 |
-| 持久化 | SQLite（better-sqlite3，WAL） | ADR-0007 |
+| 持久化 | SQLite（node:sqlite 内置，WAL） | ADR-0007 / 0018 |
 | 队列 | 进程内队列（p-queue 或自研轻量实现） | ADR-0007 |
 | Management API | Node HTTP（loopback + token），REST 风格 /v1 | ADR-0017 |
 | Agent 接入 | ACP-first + Claude / Codex 进程适配器 | ADR-0011 |
@@ -234,6 +234,7 @@ interface TaskService {
 ```text
 ModelRecord {
   id, name, provider, modelId,
+  channel: "direct" | "runtime",
   wireApi: "openai-compatible" | "anthropic" | "responses",
   baseUrl, authRef,
   billing: { type: "free" | "pay-as-you-go" | "subscription" | "token-plan" | "local",
@@ -247,6 +248,13 @@ ModelRecord {
 计费方式枚举：`free / pay-as-you-go / subscription / token-plan / local`。
 
 生命周期：`add → active`；探测失败 → `error`；用户可 `disable` / `remove`。
+
+channel 语义：
+
+```text
+direct   用户提供 base_url + 凭据引用（如自购 Qwen）
+runtime  由 Agent Runtime 托管认证（如 opencode 免费模型），适配器直通 provider/modelId
+```
 
 ### TODO
 
@@ -412,6 +420,7 @@ Worker.run(task):
 - ACP 适配器：spawn `opencode acp` / `openclaw acp` / `reasonix acp`，NDJSON JSON-RPC 2.0 最小客户端（手写，避免未成熟依赖）；
 - Claude 适配器：`claude -p <prompt> --settings <file> --output-format json --permission-mode <mode>`；
 - Codex 适配器：`codex exec <prompt> --json --sandbox <mode> -m <model>`；
+- OpenCode 进程适配器（MVP 首个，零成本）：`opencode run --format json -m provider/model`；
 - 统一接口（ADR-0011）：
 
 ```ts
@@ -524,6 +533,9 @@ type=review   → diff 审查（人工确认）
 - 混合策略（ADR-0009）：有 git 仓库 → worktree；无 → `cp -R` 副本；
 - merge 由人工确认（MVP）。
 
+MVP 实测修正：副本目录置于系统临时目录
+`<tmpdir>/agent-orchestrator-ws/<taskId>`——`cpSync` 拒绝复制目录到自身子目录（ADR-0018）。
+
 ### 方案设计
 
 ```text
@@ -602,7 +614,7 @@ metric_event 类型：
 
 ### 技术选型
 
-- better-sqlite3（同步、快、类型友好）；
+- node:sqlite（内置 DatabaseSync，同步、快、零原生依赖）；
 - WAL + busy_timeout；migrations 用 schema_version 表；
 - 单写者模型（写集中在 daemon 进程）。
 
@@ -612,7 +624,7 @@ metric_event 类型：
 
 ### TODO
 
-- [ ] T1 better-sqlite3 集成 + 连接封装
+- [ ] T1 node:sqlite（DatabaseSync）集成 + 连接封装
 - [ ] T2 migrations 机制
 - [ ] T3 7 张表 DDL 落地
 - [ ] T4 索引与查询封装（Repository）

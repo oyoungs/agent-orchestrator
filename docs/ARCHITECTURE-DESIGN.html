@@ -353,7 +353,7 @@ footer{
         <tr><td>语言 / 运行时</td><td><code>TypeScript + Node 26</code></td><td>ADR-0006</td></tr>
         <tr><td>包管理</td><td><code>pnpm</code></td><td>ADR-0006</td></tr>
         <tr><td>CLI 框架</td><td><code>commander + zod</code></td><td>ADR-0008/0013</td></tr>
-        <tr><td>持久化</td><td><code>SQLite (better-sqlite3, WAL)</code></td><td>ADR-0007</td></tr>
+        <tr><td>持久化</td><td><code>SQLite (node:sqlite, WAL)</code></td><td>ADR-0007 / 0018</td></tr>
         <tr><td>队列</td><td><code>进程内队列（p-queue 或自研）</code></td><td>ADR-0007</td></tr>
         <tr><td>管理 API</td><td><code>node:http · REST /v1 · loopback + token</code></td><td>ADR-0017</td></tr>
         <tr><td>Agent 接入</td><td><code>ACP-first + Claude/Codex 进程适配器</code></td><td>ADR-0011</td></tr>
@@ -700,11 +700,11 @@ footer{
 
       <div class="card" id="c18">
         <div class="card-head"><span class="card-id">C18</span><span class="card-title">SQLite Store</span><span class="chip amber">Phase 2</span><span class="card-path">src/store/</span></div>
-        <p class="card-lead">better-sqlite3 + WAL + migrations；单写者模型（写集中在 daemon）。</p>
+        <p class="card-lead">node:sqlite + WAL + migrations；单写者模型（写集中在 daemon）。</p>
         <div class="arch">表：tasks · agent_runtimes · models<br>· model_change_log · worker_runs<br>· usage_records · metric_events</div>
         <div class="todo-title"><h4>TODO</h4><span class="cnt">4 项</span></div>
         <ul class="todo">
-          <li>T1 better-sqlite3 集成 + 连接封装</li>
+          <li>T1 node:sqlite（DatabaseSync）集成 + 连接封装</li>
           <li>T2 migrations 机制（schema_version）</li>
           <li>T3 7 张表 DDL 落地（见 §03）</li>
           <li>T4 索引与 Repository 查询封装</li>

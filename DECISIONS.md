@@ -463,6 +463,43 @@ Accepted (2026-08-05)
 
 ---
 
+## ADR-0018 MVP Implementation Notes
+
+### Status
+
+Accepted (2026-08-05)
+
+### Decision
+
+```text
+存储        node:sqlite（Node 内置 DatabaseSync）替代 better-sqlite3
+models 表   新增 channel 字段（direct | runtime）
+Workspace  副本目录置于系统临时目录 <tmpdir>/agent-orchestrator-ws/<taskId>
+首个适配器  OpenCode（runtime channel，零成本 E2E）+ Claude Code（anthropic 临时 settings 注入）
+```
+
+### Context
+
+2026-08-05 Phase 2 E2E 实测发现并修复：
+
+- `cpSync` 拒绝把目录复制到自身的子目录（workspace 原设计在项目内导致复制为空）→ workspace 移到临时目录；
+- daemon 以 `stdio=ignore` 启动时调度异常不可见 → 启动日志落盘 `logs/daemon.out.log`；
+- worker 在 workspace 分配失败时任务永久悬挂 → 任何阶段失败必须置为 `failed`；
+- 崩溃恢复验证通过：重启后悬挂任务自动标记 `interrupted`。
+
+### Reason
+
+- `node:sqlite` 零原生编译依赖，Node 26 内置，规避 better-sqlite3 ABI 风险；
+- `channel` 区分「用户直连 API（提供 base_url + 凭据引用）」与「Runtime 托管（如 opencode 免费模型）」，适配器据此选择直通或注入；
+- 首个适配器选 OpenCode 免费模型，使 E2E 验收零成本。
+
+### Consequences
+
+- MVP 运行依赖仅 commander / zod / smol-toml；
+- `channel` 进入数据模型，Phase 5 worktree 复用同一 Workspace 接口。
+
+---
+
 # Future ADRs
 
 后续记录：

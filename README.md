@@ -137,6 +137,30 @@ Agent Adapter: ACP-first + Claude/Codex 进程适配器
 模型注册表: 用户运行时管理（CLI / WebUI），初始为空
 ```
 
+## 快速开始（MVP）
+
+```bash
+pnpm install
+
+# 1. 启动后台守护进程
+node src/cli/index.ts daemon start
+
+# 2. 添加自己购买的模型（初始注册表为空）
+node src/cli/index.ts model add \
+  --provider opencode --model-id deepseek-v4-flash-free \
+  --wire-api openai-compatible --channel runtime --billing free
+
+# 3. 提交任务
+node src/cli/index.ts run "Reply with exactly one word: PONG"
+
+# 4. 查看状态 / 移除模型 / 停止
+node src/cli/index.ts status
+node src/cli/index.ts model remove <model-id>
+node src/cli/index.ts daemon stop
+```
+
+开发验证：`pnpm typecheck` / `pnpm test`。
+
 ---
 
 ## Architecture

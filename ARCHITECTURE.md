@@ -213,6 +213,7 @@ Orchestrator **不内置任何特定模型的接入实现**（ADR-0016）。用�
 OpenAI 兼容  → 默认 wire protocol（DeepSeek / MIMO / MiniMax / Qwen 等）
 Responses    → 供 Codex 使用（用户添加模型时选择）
 Anthropic    → 供 Claude Code 使用（--settings 注入）
+runtime      → 由 Agent Runtime 托管认证（如 opencode 免费模型），适配器直通模型 id
 ```
 
 Model Registry 负责记录 provider / model / 计费方式 / 支持能力 / 状态，用于 Router 决策与成本核算（FR-002 / ADR-0012）。
@@ -271,6 +272,7 @@ available, last_checked_at
 
 ```text
 id, name, provider, model_id,
+channel (direct | runtime),
 wire_api (openai-compatible | anthropic | responses),
 base_url, auth_ref,
 billing (json: type / unit_prices / currency),
