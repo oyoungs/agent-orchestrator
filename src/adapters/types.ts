@@ -12,7 +12,15 @@ export type AgentEvent =
   | { type: "started"; ts: number }
   | { type: "thinking"; ts: number; model: string }
   | { type: "text"; ts: number; text: string }
-  | { type: "tool"; ts: number; tool: string; input?: unknown; output?: unknown }
+  | {
+      type: "tool";
+      ts: number;
+      tool: string;
+      callId?: string;
+      status?: "running" | "completed" | "failed" | "denied";
+      input?: unknown;
+      output?: unknown;
+    }
   | { type: "usage"; ts: number; usage: AdapterUsage }
   | { type: "finished"; ts: number; exitCode: number; ok: boolean; result?: string; usage?: AdapterUsage }
   | { type: "error"; ts: number; errorClass: string; message: string };

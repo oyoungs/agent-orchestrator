@@ -82,6 +82,8 @@ export async function executeTask(deps: WorkerDeps, task: Task): Promise<void> {
         insertUsage(deps, runId, model, event.usage, startedAt);
       } else if (event.type === "finished" && event.result) {
         lastAgentResult = event.result;
+      } else if (event.type === "tool") {
+        insertMetric(deps, runId, "worker.tool", { tool: event.tool, status: event.status ?? "completed" });
       } else if (event.type === "error") {
         throw new WorkerFailure(event.message, event.errorClass);
       }

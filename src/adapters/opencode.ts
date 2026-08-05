@@ -4,6 +4,7 @@ import type { AgentAdapter, AgentEvent, AgentTaskInput, AdapterUsage, ProbeResul
 
 interface OpenCodeStepFinish {
   type: "step_finish";
+  timestamp?: number;
   tokens?: {
     input?: number;
     output?: number;
@@ -14,11 +15,65 @@ interface OpenCodeStepFinish {
 
 interface OpenCodeStepStart {
   type: "step_start";
+  timestamp?: number;
 }
 
 interface OpenCodeText {
   type: "text";
+  timestamp?: number;
   part?: { text?: string };
+}
+
+export interface OpenCodeToolUse {
+  type: "tool_use";
+  timestamp?: number;
+  part?: {
+    type?: string;
+    tool?: string;
+    callID?: string;
+    state?: { status?: string; input?: unknown; output?: unknown };
+  };
+}
+
+export type OpenCodeEvent = OpenCodeStepFinish | OpenCodeStepStart | OpenCodeText | OpenCodeToolUse;
+
+/** opencode JSONL 事件 → 统一 AgentEvent（纯函数，便于测试） */
+export function openCodeEventToAgentEvent(ev: OpenCodeEvent, modelLabel: string): AgentEvent | null {
+  switch (ev.type) {
+    case "step_start":
+      return { type: "thinking", ts: ev.timestamp ?? Date.now(), model: modelLabel };
+    case "text":
+      return ev.part?.text ? { type: "text", ts: ev.timestamp ?? Date.now(), text: ev.part.text } : null;
+    case "tool_use": {
+      const part = ev.part;
+      const state = part?.state;
+      return {
+        type: "tool",
+        ts: ev.timestamp ?? Date.now(),
+        tool: String(part?.tool ?? "unknown"),
+        callId: part?.callID,
+        status: state?.status === "error" ? "failed" : state?.status === "running" ? "running" : "completed",
+        input: state?.input,
+        output: state?.output,
+      };
+    }
+    case "step_finish": {
+      const t = ev.tokens ?? {};
+      return {
+        type: "usage",
+        ts: ev.timestamp ?? Date.now(),
+        usage: {
+          inputTokens: t.input ?? 0,
+          outputTokens: t.output ?? 0,
+          cacheReadTokens: t.cache?.read ?? 0,
+          cacheWriteTokens: t.cache?.write ?? 0,
+          reasoningTokens: t.reasoning ?? 0,
+        },
+      };
+    }
+    default:
+      return null;
+  }
 }
 
 /** OpenCode 进程适配器：`opencode run --format json`，JSONL 事件流（零成本免费模型可用） */
@@ -51,28 +106,17 @@ export class OpenCodeAdapter implements AgentAdapter {
     const texts: string[] = [];
     for await (const line of rl) {
       if (!line.trim()) continue;
-      let ev: OpenCodeStepFinish | OpenCodeStepStart | OpenCodeText | undefined;
+      let ev: OpenCodeEvent | undefined;
       try {
-        ev = JSON.parse(line) as OpenCodeStepFinish | OpenCodeStepStart | OpenCodeText;
+        ev = JSON.parse(line) as OpenCodeEvent;
       } catch {
         continue;
       }
-      if (ev.type === "step_start") {
-        yield { type: "thinking", ts: Date.now(), model: modelLabel };
-      } else if (ev.type === "text" && ev.part?.text) {
-        texts.push(ev.part.text);
-        yield { type: "text", ts: Date.now(), text: ev.part.text };
-      } else if (ev.type === "step_finish") {
-        const t = ev.tokens ?? {};
-        usage = {
-          inputTokens: t.input ?? 0,
-          outputTokens: t.output ?? 0,
-          cacheReadTokens: t.cache?.read ?? 0,
-          cacheWriteTokens: t.cache?.write ?? 0,
-          reasoningTokens: t.reasoning ?? 0,
-        };
-        yield { type: "usage", ts: Date.now(), usage };
-      }
+      const agentEvent = openCodeEventToAgentEvent(ev, modelLabel);
+      if (!agentEvent) continue;
+      if (agentEvent.type === "usage") usage = agentEvent.usage;
+      if (agentEvent.type === "text") texts.push(agentEvent.text);
+      yield agentEvent;
     }
     child.stderr.on("data", (d: Buffer) => {
       stderrTail = (stderrTail + d.toString()).slice(-2000);

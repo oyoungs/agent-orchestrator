@@ -167,7 +167,13 @@ async function runTurn(client: DaemonClient, taskId: string): Promise<string> {
           }
         } else if (ev.type === "tool") {
           spinner.stop();
-          console.log(`  [工具] ${String(ev.tool)}`);
+          const mark = ev.status === "failed" ? "✗" : ev.status === "denied" ? "⛔" : "✓";
+          const input = ev.input !== undefined ? ` ${JSON.stringify(ev.input).slice(0, 120)}` : "";
+          console.log(`  [工具] ${mark} ${String(ev.tool)}${input}`);
+          if (ev.output) {
+            const out = String(ev.output).trim().slice(0, 200);
+            if (out) console.log(`         ${out.replace(/\n/g, "\n         ")}`);
+          }
         } else if (ev.type === "error") {
           spinner.stop();
           console.error(`  [错误] ${String(ev.message)}`);

@@ -39,7 +39,7 @@ export async function runTask(client: DaemonClient, prompt: string): Promise<voi
     const out = await client.request("GET", `/v1/tasks/${task.id}/output?after=${printed}`);
     if (out.events?.length) {
       for (const ev of out.events) {
-        if (ev.type === "thinking" && !sawText) spinner.start(`模型 ${ev.model} 正在思考`);
+        if (ev.type === "thinking" && !sawText && !thinkingShown) spinner.start(`模型 ${ev.model} 正在思考`);
         if (ev.type === "text" && ev.text) {
           if (!sawText) spinner.stop();
           sawText = true;
@@ -51,7 +51,13 @@ export async function runTask(client: DaemonClient, prompt: string): Promise<voi
           }
         } else if (ev.type === "tool") {
           spinner.stop();
-          console.log(`  [tool] ${String(ev.tool)}`);
+          const mark = ev.status === "failed" ? "✗" : ev.status === "denied" ? "⛔" : "✓";
+          const input = ev.input !== undefined ? ` ${JSON.stringify(ev.input).slice(0, 120)}` : "";
+          console.log(`  [工具] ${mark} ${String(ev.tool)}${input}`);
+          if (ev.output) {
+            const out = String(ev.output).trim().slice(0, 200);
+            if (out) console.log(`         ${out.replace(/\n/g, "\n         ")}`);
+          }
         } else if (ev.type === "error") {
           spinner.stop();
           console.error(`  [error] ${String(ev.message)}`);
