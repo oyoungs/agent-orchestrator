@@ -157,7 +157,7 @@ node src/cli/index.ts run "Reply with exactly one word: PONG"
 node src/cli/index.ts chat
 node src/cli/index.ts chat --resume <task-id>   # 继续已有会话
 # chat 中模型输出实时渲染 Markdown（标题/加粗/列表/代码块/表格等）
-# chat 内可用 /help /history /tasks /models /model <id> /quit
+# chat 内可用 /help /history /resume <id> /tasks /models /model <id> /quit
 
 # 4. 查看状态（含执行过程回放）/ 移除模型 / 停止
 node src/cli/index.ts status <task-id>

@@ -167,11 +167,31 @@ async function handleCommand(
       console.log(`命令列表：
   /help          帮助
   /history       当前会话历史（任务链）
+  /resume <id>   恢复指定历史会话（任务链）
   /tasks         最近任务列表
   /models        已注册模型
   /model <id>    指定下一个任务使用的模型（/models 查看 id）
   /quit, /exit   退出`);
       break;
+    case "/resume": {
+      if (!arg) {
+        console.log("用法：/resume <task-id>（/tasks 或 /history 查看 id）");
+        break;
+      }
+      try {
+        const chain = (await client.request("GET", `/v1/tasks/${arg}/chain`)) as any[];
+        const last = chain[chain.length - 1];
+        setLast(last?.id ?? arg);
+        console.log(`已切换到会话：共 ${chain.length} 轮历史`);
+        for (const t of chain) {
+          const result = agentResultOf(t);
+          console.log(`  [${t.type} · ${t.status}] ${String(t.prompt).slice(0, 100)}${result ? `\n    → ${result.slice(0, 120)}` : ""}`);
+        }
+      } catch {
+        console.log(`任务 ${arg} 不存在，无法恢复`);
+      }
+      break;
+    }
     case "/history": {
       const last = getLast();
       if (!last) {
