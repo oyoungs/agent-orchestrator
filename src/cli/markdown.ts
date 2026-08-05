@@ -46,6 +46,26 @@ function stripAnsi(text: string): string {
   return text.replace(ANSI_M_RE, "");
 }
 
+/** 终端显示宽度：CJK/全角/emoji 计 2 列，其余 1 列 */
+export function displayWidth(text: string): number {
+  let width = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0;
+    const wide =
+      (code >= 0x1100 && code <= 0x115f) ||
+      (code >= 0x2e80 && code <= 0xa4cf) ||
+      (code >= 0xac00 && code <= 0xd7a3) ||
+      (code >= 0xf900 && code <= 0xfaff) ||
+      (code >= 0xfe30 && code <= 0xfe4f) ||
+      (code >= 0xff00 && code <= 0xff60) ||
+      (code >= 0xffe0 && code <= 0xffe6) ||
+      (code >= 0x1f300 && code <= 0x1faff) ||
+      (code >= 0x20000 && code <= 0x3fffd);
+    width += wide ? 2 : 1;
+  }
+  return width;
+}
+
 export function renderMarkdown(text: string): string {
   const tokens = lexer(prepareMarkdown(text), { gfm: true, breaks: true });
   const blocks = tokens.map((t) => renderBlock(t, 0)).filter((b) => b !== "");
@@ -171,7 +191,7 @@ function renderInlineToken(t: InlineToken): string {
 export function terminalLines(text: string, columns: number): number {
   let lines = 0;
   for (const line of text.split("\n")) {
-    const visible = stripAnsi(line).length;
+    const visible = displayWidth(stripAnsi(line));
     lines += Math.max(1, Math.ceil(visible / Math.max(1, columns)));
   }
   return lines;
@@ -201,9 +221,7 @@ export class MarkdownStream {
     const styled = renderMarkdown(this.buffer);
     const target = terminalLines(styled, this.columns);
     if (this.lines > 0) {
-      process.stdout.write(`\x1b[${this.lines}A`);
-      for (let i = 0; i < this.lines; i += 1) process.stdout.write("\x1b[2K");
-      process.stdout.write("\r");
+      process.stdout.write(`\x1b[${this.lines}A\x1b[0J`);
     }
     process.stdout.write(styled);
     this.lines = target;

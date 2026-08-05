@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderMarkdown, sanitize, terminalLines } from "../src/cli/markdown.ts";
+import { displayWidth, renderMarkdown, sanitize, terminalLines } from "../src/cli/markdown.ts";
 
 const RESET = "\x1b[0m";
 
@@ -55,5 +55,11 @@ describe("markdown renderer", () => {
     expect(terminalLines("abc\ndef", 10)).toBe(2);
     expect(terminalLines("a".repeat(25), 10)).toBe(3);
     expect(terminalLines("\x1b[1mabc\x1b[0m", 10)).toBe(1);
+  });
+
+  it("counts CJK characters as double width", () => {
+    expect(displayWidth("中文abc")).toBe(7);
+    expect(displayWidth("abc")).toBe(3);
+    expect(terminalLines("中文中文中文", 6)).toBe(2);
   });
 });
