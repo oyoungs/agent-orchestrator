@@ -1,0 +1,30 @@
+# Agent Orchestrator 默认配置
+# 模型注册表为空：请通过 `agent model add` 添加模型（ADR-0016）
+
+[orchestrator]
+concurrency = 2
+default_timeout_sec = 300
+default_retries = 1
+
+[daemon]
+host = "127.0.0.1"
+port = 43999
+
+[router]
+free_first = true
+escalation = ["flash", "pro", "strongest"]
+
+[workspace]
+mode = "copy"   # MVP: copy；Phase 5 支持 worktree
+
+[approvals]
+require_human = ["git:push", "network", "fs:write-outside-workspace"]
+
+[[agents]]
+id = "opencode"
+kind = "opencode"
+
+[[agents]]
+id = "claude-code"
+kind = "claude-code"
+permission_mode = "plan"
