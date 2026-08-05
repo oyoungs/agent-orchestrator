@@ -38,6 +38,17 @@ describe("markdown renderer", () => {
     expect(out).not.toContain("```");
   });
 
+  it("renders tables with inline markdown in cells", () => {
+    const out = renderMarkdown("| 名称 | 说明 |\n| --- | --- |\n| **加粗** | `code` |");
+    expect(out).toContain("名称");
+    expect(out).toContain("│");
+    expect(out).toContain("\x1b[1m加粗\x1b[0m");
+    expect(out).toContain("\x1b[48;5;236m");
+    expect(out).toContain("code");
+    expect(out).not.toContain("**");
+    expect(out).not.toContain("`");
+  });
+
   it("renders lists and links", () => {
     const out = renderMarkdown("- a\n- b\n\n[链接](https://example.com)");
     expect(out).toContain("- a");

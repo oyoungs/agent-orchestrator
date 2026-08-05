@@ -127,22 +127,32 @@ function renderBlock(token: Token, indent: number): string {
     }
     case "table": {
       const table = token as Tokens.Table;
-      const cellText = (cell: unknown): string => {
-        if (typeof cell === "string") return stripAnsi(cell);
-        if (cell && typeof cell === "object" && "text" in cell) {
-          return stripAnsi(String((cell as { text?: unknown }).text ?? ""));
-        }
-        return "";
+      const renderCell = (cell: unknown): string => {
+        const raw =
+          typeof cell === "string"
+            ? cell
+            : cell && typeof cell === "object" && "text" in cell
+              ? String((cell as { text?: unknown }).text ?? "")
+              : "";
+        const para = lexer(raw, { gfm: true, breaks: false }).find((t) => t.type === "paragraph") as
+          | Tokens.Paragraph
+          | undefined;
+        return para ? renderInline((para.tokens ?? []) as InlineToken[]) : sanitize(raw);
       };
       const rows: string[][] = [
-        table.header.map(cellText),
-        ...table.rows.map((r) => r.map(cellText)),
+        table.header.map(renderCell),
+        ...table.rows.map((r) => r.map(renderCell)),
       ];
       const widths = table.header.map((_, i) =>
-        Math.max(...rows.map((r) => (r[i] ?? "").length), table.align[i] ? 3 : 0),
+        Math.max(...rows.map((r) => displayWidth(stripAnsi(r[i] ?? ""))), table.align[i] ? 3 : 0),
       );
       const fmt = (cells: string[]): string =>
-        cells.map((cell, i) => cell.padEnd(widths[i] ?? 0)).join(" │ ");
+        cells
+          .map((cell, i) => {
+            const cellWidth = displayWidth(stripAnsi(cell));
+            return `${cell}${" ".repeat(Math.max(0, (widths[i] ?? 0) - cellWidth))}`;
+          })
+          .join(" │ ");
       const sep = widths.map((w) => "─".repeat(w)).join("─┼─");
       const out = [fmt(rows[0] ?? []), sep, ...rows.slice(1).map(fmt)];
       return out.map((line) => `${pad}${C.table}${line}${RESET}`).join("\n");

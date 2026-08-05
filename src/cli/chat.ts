@@ -12,6 +12,7 @@ export interface ChatOptions {
 
 export async function chat(client: DaemonClient, opts: ChatOptions = {}): Promise<void> {
   const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: process.stdin.isTTY });
+  rl.setPrompt("你> ");
 
   // 行缓冲：从创建起持续收集输入，避免异步处理期间丢失管道行
   let inputClosed = false;
@@ -58,7 +59,7 @@ export async function chat(client: DaemonClient, opts: ChatOptions = {}): Promis
   }
 
   while (true) {
-    if (process.stdin.isTTY && !inputClosed) process.stdout.write("你> ");
+    if (process.stdin.isTTY && !inputClosed) rl.prompt();
     const line = await nextInput();
     if (line === null) break;
     const input = line.trim();
