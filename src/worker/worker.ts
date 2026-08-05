@@ -57,8 +57,10 @@ export async function executeTask(deps: WorkerDeps, task: Task): Promise<void> {
     const outputFile = join(outputDir, "output.jsonl");
 
     const adapter = deps.adapters.pick(model);
+    const context = await buildContext(deps, task);
     const input: AgentTaskInput = {
       prompt: task.prompt,
+      context,
       cwd: ws,
       model,
       timeoutMs: deps.config.orchestrator.defaultTimeoutSec * 1000,
@@ -101,6 +103,30 @@ export async function executeTask(deps: WorkerDeps, task: Task): Promise<void> {
     const status = deps.taskRepo.get(task.id)?.status;
     deps.logger.info("task.finished", { taskId: task.id, status });
   }
+}
+
+/** 会话续接：把父任务链（最多 5 轮）的提问与结果作为上下文 */
+async function buildContext(deps: WorkerDeps, task: Task, maxTurns = 5): Promise<string | undefined> {
+  const turns: Array<{ prompt: string; result?: string }> = [];
+  let current: Task | undefined = task.parentId ? deps.taskRepo.get(task.parentId) : undefined;
+  while (current && turns.length < maxTurns) {
+    let result: string | undefined;
+    if (current.resultSummary) {
+      try {
+        const parsed = JSON.parse(current.resultSummary) as { agentResult?: string };
+        if (parsed.agentResult) result = parsed.agentResult;
+      } catch {
+        // 忽略无法解析的历史结果
+      }
+    }
+    turns.push({ prompt: current.prompt, result });
+    current = current.parentId ? deps.taskRepo.get(current.parentId) : undefined;
+  }
+  if (turns.length === 0) return undefined;
+  return turns
+    .reverse()
+    .map((t) => `用户: ${t.prompt}${t.result ? `\n结果: ${t.result}` : ""}`)
+    .join("\n\n");
 }
 
 async function failTask(

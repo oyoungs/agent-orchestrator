@@ -10,6 +10,7 @@ export interface AdapterUsage {
 
 export type AgentEvent =
   | { type: "started"; ts: number }
+  | { type: "thinking"; ts: number; model: string }
   | { type: "text"; ts: number; text: string }
   | { type: "tool"; ts: number; tool: string; input?: unknown; output?: unknown }
   | { type: "usage"; ts: number; usage: AdapterUsage }
@@ -18,6 +19,7 @@ export type AgentEvent =
 
 export interface AgentTaskInput {
   prompt: string;
+  context?: string;
   cwd: string;
   model: ModelRecord;
   timeoutMs: number;

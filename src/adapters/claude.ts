@@ -44,11 +44,13 @@ export class ClaudeAdapter implements AgentAdapter {
     const settingsPath = join(input.cwd, ".agent-orchestrator-claude-settings.json");
     writeFileSync(settingsPath, JSON.stringify(settings), { mode: 0o600 });
 
-    const args = ["-p", input.prompt, "--settings", settingsPath, "--output-format", "json"];
+    const prompt = input.context ? `${input.context}\n\n${input.prompt}` : input.prompt;
+    const args = ["-p", prompt, "--settings", settingsPath, "--output-format", "json"];
     if (this.opts.permissionMode) args.push("--permission-mode", this.opts.permissionMode);
     args.push("--max-budget-usd", String(this.opts.budgetUsd ?? 0.5));
 
     yield { type: "started", ts: Date.now() };
+    yield { type: "thinking", ts: Date.now(), model: `${input.model.provider}/${input.model.modelId}` };
     try {
       const result = await this.runClaude(args, input.cwd, input.timeoutMs, settingsPath);
       if (result.is_error) {

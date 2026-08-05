@@ -106,4 +106,11 @@ CREATE TABLE metric_events (
 );
 `,
   },
+  {
+    version: 2,
+    sql: `
+ALTER TABLE tasks ADD COLUMN routing_info TEXT;
+ALTER TABLE tasks ADD COLUMN session_key TEXT;
+`,
+  },
 ];

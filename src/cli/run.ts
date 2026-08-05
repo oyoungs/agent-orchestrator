@@ -1,31 +1,66 @@
 import type { DaemonClient } from "./client.ts";
 import { sleep } from "./client.ts";
+import { Spinner } from "./spinner.ts";
 
 const TERMINAL = new Set(["succeeded", "failed", "validation_failed", "cancelled", "timed_out"]);
 
 export async function runTask(client: DaemonClient, prompt: string): Promise<void> {
   const task = await client.request("POST", "/v1/tasks", { prompt });
-  console.log(`task ${task.id} submitted · type=${task.type} · model=${task.modelId ?? "-"}`);
+  console.log(`task ${task.id} submitted · type=${task.type}${task.status === "analyzing" ? " · analyzing" : ""}`);
+  const spinner = new Spinner();
   let printed = 0;
-  let runningShown = false;
+  let analysisShown = false;
+  let routingShown = false;
+  let thinkingShown = false;
+  let sawText = false;
+  let routingModel: string | undefined;
   for (let i = 0; i < 600; i += 1) {
     const current = await client.request("GET", `/v1/tasks/${task.id}`);
-    if (!runningShown && (current.status === "running" || TERMINAL.has(current.status))) {
-      runningShown = true;
-      console.log(`task running · model=${current.modelId ?? "-"}`);
+    if (!analysisShown && current.status === "analyzing") {
+      analysisShown = true;
+      spinner.start("分析中…（免费模型）");
+    } else if (!routingShown && current.routingInfo) {
+      routingShown = true;
+      spinner.stop();
+      try {
+        const info = JSON.parse(current.routingInfo) as { model?: string; source?: string };
+        routingModel = info.model;
+        console.log(`已选择模型 ${info.model ?? "-"}（${info.source === "free-model" ? "免费模型分析" : "规则路由"}）`);
+      } catch {
+        console.log("已选择模型（路由完成）");
+      }
+    }
+    if (!thinkingShown && current.status === "running") {
+      thinkingShown = true;
+      spinner.start(`模型 ${routingModel ?? "…"} 正在思考`);
     }
     const out = await client.request("GET", `/v1/tasks/${task.id}/output?after=${printed}`);
     if (out.events?.length) {
-      for (const ev of out.events) printEvent(ev);
+      for (const ev of out.events) {
+        if (ev.type === "thinking" && !sawText) spinner.start(`模型 ${ev.model} 正在思考`);
+        if (ev.type === "text" && ev.text) {
+          if (!sawText) spinner.stop();
+          sawText = true;
+          console.log(`  ${String(ev.text)}`);
+        } else if (ev.type === "tool") {
+          spinner.stop();
+          console.log(`  [tool] ${String(ev.tool)}`);
+        } else if (ev.type === "error") {
+          spinner.stop();
+          console.error(`  [error] ${String(ev.message)}`);
+        }
+      }
       printed = out.total ?? printed;
     }
     if (TERMINAL.has(current.status)) {
+      spinner.stop();
       printTask(current);
       process.exitCode = current.status === "succeeded" ? 0 : 1;
       return;
     }
     await sleep(1000);
   }
+  spinner.stop();
   console.error("task did not finish within polling window");
   process.exitCode = 1;
 }

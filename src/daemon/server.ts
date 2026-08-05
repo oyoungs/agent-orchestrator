@@ -131,7 +131,10 @@ async function handleTasks(
   if (!id) {
     if (req.method === "POST") {
       const body = await readJson(req);
-      const task = svc.submit(String(body?.prompt ?? ""));
+      const task = svc.submit(String(body?.prompt ?? ""), {
+        modelId: body?.modelId !== undefined ? String(body.modelId) : undefined,
+        parentId: body?.parentId !== undefined ? String(body.parentId) : undefined,
+      });
       ctx.logger.info("task.submitted", { taskId: task.id, type: task.type });
       return sendJson(res, 201, task);
     }
@@ -147,6 +150,9 @@ async function handleTasks(
     const raw = Number(search?.get("after") ?? 0);
     const after = Number.isFinite(raw) ? Math.max(0, raw) : 0;
     return sendJson(res, 200, readOutputEvents(ctx.stateDir, id, after));
+  }
+  if (sub === "chain" && req.method === "GET") {
+    return sendJson(res, 200, svc.chain(id));
   }
   if (req.method === "GET") return sendJson(res, 200, svc.get(id));
   return sendJson(res, 405, { error: { code: "METHOD_NOT_ALLOWED", message: `unsupported ${req.method}` } });

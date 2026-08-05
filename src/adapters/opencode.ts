@@ -12,6 +12,10 @@ interface OpenCodeStepFinish {
   };
 }
 
+interface OpenCodeStepStart {
+  type: "step_start";
+}
+
 interface OpenCodeText {
   type: "text";
   part?: { text?: string };
@@ -22,7 +26,9 @@ export class OpenCodeAdapter implements AgentAdapter {
   id = "opencode";
 
   async *invoke(input: AgentTaskInput): AsyncIterable<AgentEvent> {
-    const args = ["run", input.prompt, "--format", "json"];
+    const prompt = input.context ? `${input.context}\n\n${input.prompt}` : input.prompt;
+    const modelLabel = `${input.model.provider}/${input.model.modelId}`;
+    const args = ["run", prompt, "--format", "json"];
     if (input.model.channel === "runtime" || input.model.wireApi === "openai-compatible") {
       args.push("-m", `${input.model.provider}/${input.model.modelId}`);
     }
@@ -45,13 +51,15 @@ export class OpenCodeAdapter implements AgentAdapter {
     const texts: string[] = [];
     for await (const line of rl) {
       if (!line.trim()) continue;
-      let ev: OpenCodeStepFinish | OpenCodeText | undefined;
+      let ev: OpenCodeStepFinish | OpenCodeStepStart | OpenCodeText | undefined;
       try {
-        ev = JSON.parse(line) as OpenCodeStepFinish | OpenCodeText;
+        ev = JSON.parse(line) as OpenCodeStepFinish | OpenCodeStepStart | OpenCodeText;
       } catch {
         continue;
       }
-      if (ev.type === "text" && ev.part?.text) {
+      if (ev.type === "step_start") {
+        yield { type: "thinking", ts: Date.now(), model: modelLabel };
+      } else if (ev.type === "text" && ev.part?.text) {
         texts.push(ev.part.text);
         yield { type: "text", ts: Date.now(), text: ev.part.text };
       } else if (ev.type === "step_finish") {

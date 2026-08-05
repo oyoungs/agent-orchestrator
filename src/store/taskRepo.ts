@@ -5,6 +5,7 @@ import type { Task, TaskStatus, TaskType } from "../types.ts";
 interface TaskRow {
   id: string;
   parent_id: string | null;
+  session_key: string | null;
   dag_group: string | null;
   type: string;
   prompt: string;
@@ -19,12 +20,14 @@ interface TaskRow {
   started_at: number | null;
   finished_at: number | null;
   result_summary: string | null;
+  routing_info: string | null;
 }
 
 function rowToTask(row: TaskRow): Task {
   return {
     id: row.id,
     parentId: row.parent_id,
+    sessionKey: row.session_key,
     dagGroup: row.dag_group,
     type: row.type as TaskType,
     prompt: row.prompt,
@@ -39,6 +42,7 @@ function rowToTask(row: TaskRow): Task {
     startedAt: row.started_at,
     finishedAt: row.finished_at,
     resultSummary: row.result_summary,
+    routingInfo: row.routing_info,
   };
 }
 
@@ -49,11 +53,19 @@ export class TaskRepo {
     this.db = db;
   }
 
-  create(input: { type: TaskType; prompt: string; modelId?: string }): Task {
+  create(input: {
+    type: TaskType;
+    prompt: string;
+    modelId?: string | null;
+    parentId?: string | null;
+    sessionKey?: string | null;
+    routingInfo?: string | null;
+  }): Task {
     const now = Date.now();
     const task: Task = {
       id: randomUUID(),
-      parentId: null,
+      parentId: input.parentId ?? null,
+      sessionKey: input.sessionKey ?? null,
       dagGroup: null,
       type: input.type,
       prompt: input.prompt,
@@ -68,17 +80,19 @@ export class TaskRepo {
       startedAt: null,
       finishedAt: null,
       resultSummary: null,
+      routingInfo: input.routingInfo ?? null,
     };
     this.db
       .prepare(
         `INSERT INTO tasks
-           (id, parent_id, dag_group, type, prompt, status, agent_id, model_id,
-            workspace_id, priority, retry_count, created_at, updated_at, started_at, finished_at, result_summary)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, parent_id, session_key, dag_group, type, prompt, status, agent_id, model_id,
+            workspace_id, priority, retry_count, created_at, updated_at, started_at, finished_at, result_summary, routing_info)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         task.id,
         task.parentId,
+        task.sessionKey,
         task.dagGroup,
         task.type,
         task.prompt,
@@ -93,6 +107,7 @@ export class TaskRepo {
         task.startedAt,
         task.finishedAt,
         task.resultSummary,
+        task.routingInfo,
       );
     return task;
   }
@@ -114,7 +129,8 @@ export class TaskRepo {
     this.db
       .prepare(
         `UPDATE tasks SET status = ?, agent_id = ?, model_id = ?, workspace_id = ?,
-           started_at = ?, finished_at = ?, result_summary = ?, retry_count = ?, updated_at = ?
+           started_at = ?, finished_at = ?, result_summary = ?, retry_count = ?,
+           type = ?, session_key = ?, routing_info = ?, updated_at = ?
          WHERE id = ?`,
       )
       .run(
@@ -126,6 +142,9 @@ export class TaskRepo {
         next.finishedAt,
         next.resultSummary,
         next.retryCount,
+        next.type,
+        next.sessionKey,
+        next.routingInfo,
         next.updatedAt,
         id,
       );
@@ -134,7 +153,7 @@ export class TaskRepo {
 
   markInterrupted(): void {
     this.db
-      .prepare("UPDATE tasks SET status = 'interrupted', updated_at = ? WHERE status IN ('running', 'queued', 'created')")
+      .prepare("UPDATE tasks SET status = 'interrupted', updated_at = ? WHERE status IN ('running', 'analyzing', 'queued', 'created')")
       .run(Date.now());
   }
 }

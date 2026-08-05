@@ -100,6 +100,7 @@ TypeScript + Node.js（pnpm）
 SQLite（better-sqlite3）+ 进程内队列
 守护进程（daemon）：存储 / 队列 / Model Registry / Management API
 CLI：agent run / agent status + agent model add / list / update / remove / disable（commander）
+交互 chat TUI：免费模型分析路由 / 模型思考状态 / 会话续接（/history /model /tasks）
 Agent Adapter：ACP-first（opencode / openclaw / reasonix）+ Claude / Codex 进程适配器
 安全：Runtime 原生权限 + 高风险动作人工确认
 可观测：JSONL 日志 + usage_records 落库
@@ -112,6 +113,10 @@ Agent Adapter：ACP-first（opencode / openclaw / reasonix）+ Claude / Codex �
 验收（模型管理）：daemon 启动后
 `agent model add <qwen>` → `agent model list` → `agent run` 使用该模型；
 `agent model remove` 可移除失效模型。初始注册表为空。
+
+验收（交互）：`agent chat` 中每次输入先显示
+「免费模型分析中 → 已选择模型 X → 模型 X 正在思考 → 流式结果」，
+继续输入自动追加为同一会话（parentId 链），`/history` 可回看。
 
 ---
 

@@ -4,6 +4,7 @@ import { createClient, CliError } from "./client.ts";
 import { startDaemon, stopDaemon, daemonStatus } from "./daemon.ts";
 import { addModel, formatModel, listModels, removeModel, updateModel, type ModelAddOptions } from "./model.ts";
 import { runTask, statusTask } from "./run.ts";
+import { chat } from "./chat.ts";
 
 const program = new Command();
 program
@@ -132,6 +133,16 @@ program
   .action(
     guard(async (taskId?: string) => {
       await statusTask(createClient(), taskId);
+    }),
+  );
+
+program
+  .command("chat")
+  .description("交互式对话模式：免费模型分析路由 + 实时思考状态 + 会话续接")
+  .option("--resume <taskId>", "继续已有会话（从该任务所在链继续）")
+  .action(
+    guard(async (opts: { resume?: string }) => {
+      await chat(createClient(), { resumeTaskId: opts.resume });
     }),
   );
 

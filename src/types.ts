@@ -7,6 +7,7 @@ export type BillingType = "free" | "pay-as-you-go" | "subscription" | "token-pla
 export type TaskType = "refactor" | "fix" | "test" | "review" | "other";
 export type TaskStatus =
   | "created"
+  | "analyzing"
   | "queued"
   | "running"
   | "succeeded"
@@ -60,6 +61,7 @@ export interface ModelRecord {
 export interface Task {
   id: string;
   parentId: string | null;
+  sessionKey: string | null;
   dagGroup: string | null;
   type: TaskType;
   prompt: string;
@@ -74,6 +76,7 @@ export interface Task {
   startedAt: number | null;
   finishedAt: number | null;
   resultSummary: string | null;
+  routingInfo: string | null;
 }
 
 export interface UsageRecord {

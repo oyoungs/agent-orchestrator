@@ -153,6 +153,11 @@ node src/cli/index.ts model add \
 # 3. 提交任务
 node src/cli/index.ts run "Reply with exactly one word: PONG"
 
+# 3.1 交互模式（推荐）：免费模型分析路由 + 实时思考状态 + 会话续接
+node src/cli/index.ts chat
+node src/cli/index.ts chat --resume <task-id>   # 继续已有会话
+# chat 内可用 /help /history /tasks /models /model <id> /quit
+
 # 4. 查看状态（含执行过程回放）/ 移除模型 / 停止
 node src/cli/index.ts status <task-id>
 node src/cli/index.ts model remove <model-id>

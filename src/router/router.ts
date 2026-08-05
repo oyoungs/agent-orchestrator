@@ -1,4 +1,5 @@
 import type { ModelRecord, TaskType } from "../types.ts";
+import type { TaskAnalysis } from "./analyzer.ts";
 
 export class RouterError extends Error {
   readonly code: string;
@@ -19,6 +20,13 @@ export interface TaskProfile {
   complexity: "low" | "medium" | "high";
   candidates: ModelRecord[];
   escalation: ModelRecord[];
+}
+
+export interface ModelSelection {
+  model: ModelRecord;
+  escalation: ModelRecord[];
+  source: "rules" | "free-model";
+  analysis: TaskAnalysis | null;
 }
 
 const KEYWORDS: Array<{ type: TaskType; patterns: RegExp[] }> = [
@@ -52,20 +60,66 @@ export class Router {
   }
 
   plan(prompt: string, models: ModelRecord[]): TaskProfile {
-    const active = models.filter((m) => m.status === "active");
-    if (active.length === 0) throw new NoModelsError();
-    const sorted = [...active].sort((a, b) => {
-      const ra = costRank(a);
-      const rb = costRank(b);
-      if (ra.group !== rb.group) return ra.group - rb.group;
-      if (ra.price !== rb.price) return ra.price - rb.price;
-      return a.name.localeCompare(b.name);
-    });
+    const selection = this.selectModel(prompt, models, null);
     return {
       type: this.classify(prompt),
       complexity: this.complexity(prompt),
-      candidates: sorted,
-      escalation: sorted.slice(1),
+      candidates: [selection.model, ...selection.escalation],
+      escalation: selection.escalation,
     };
   }
+
+  /** 模型选择：免费模型分析（可选）→ 能力过滤 → 推荐优先 → 成本排序 */
+  selectModel(prompt: string, models: ModelRecord[], analysis: TaskAnalysis | null): ModelSelection {
+    const active = models.filter((m) => m.status === "active");
+    if (active.length === 0) throw new NoModelsError();
+    const byCost = [...active].sort(costSort);
+    if (!analysis) {
+      return { model: byCost[0] as ModelRecord, escalation: byCost.slice(1), source: "rules", analysis: null };
+    }
+    const required = analysis.capabilities ?? [];
+    const capable = active.filter((m) => capabilitiesMatch(m, required));
+    const pool = capable.length > 0 ? capable : active;
+    const recommended = analysis.recommendation
+      ? pool.find(
+          (m) =>
+            m.modelId === analysis.recommendation ||
+            `${m.provider}/${m.modelId}` === analysis.recommendation ||
+            m.id === analysis.recommendation,
+        )
+      : undefined;
+    const ordered = [...pool].sort((a, b) => {
+      if (recommended && a.id === recommended.id) return -1;
+      if (recommended && b.id === recommended.id) return 1;
+      return costSort(a, b);
+    });
+    return { model: ordered[0] as ModelRecord, escalation: ordered.slice(1), source: "free-model", analysis };
+  }
+}
+
+function costSort(a: ModelRecord, b: ModelRecord): number {
+  const ra = costRank(a);
+  const rb = costRank(b);
+  if (ra.group !== rb.group) return ra.group - rb.group;
+  if (ra.price !== rb.price) return ra.price - rb.price;
+  return a.name.localeCompare(b.name);
+}
+
+function capabilitiesMatch(model: ModelRecord, required: string[]): boolean {
+  return required.every((cap) => {
+    switch (cap) {
+      case "tool_calling":
+        return model.capabilities.toolCalling === true;
+      case "reasoning":
+        return model.capabilities.reasoning === true;
+      case "streaming":
+        return model.capabilities.streaming !== false;
+      case "large_context":
+        return (model.capabilities.contextWindow ?? 0) >= 128_000;
+      case "vision":
+        return (model.capabilities.modalities ?? []).includes("image");
+      default:
+        return true;
+    }
+  });
 }
