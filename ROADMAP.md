@@ -98,7 +98,8 @@ Result
 ```text
 TypeScript + Node.js（pnpm）
 SQLite（better-sqlite3）+ 进程内队列
-CLI：agent run / agent status（commander）
+守护进程（daemon）：存储 / 队列 / Model Registry / Management API
+CLI：agent run / agent status + agent model add / list / update / remove / disable（commander）
 Agent Adapter：ACP-first（opencode / openclaw / reasonix）+ Claude / Codex 进程适配器
 安全：Runtime 原生权限 + 高风险动作人工确认
 可观测：JSONL 日志 + usage_records 落库
@@ -108,16 +109,24 @@ Agent Adapter：ACP-first（opencode / openclaw / reasonix）+ Claude / Codex �
 `CLI → Task → Router → Agent Adapter → Model → Worker → Result` 并产出
 `Build / Test / Lint` 验证报告。
 
+验收（模型管理）：daemon 启动后
+`agent model add <qwen>` → `agent model list` → `agent run` 使用该模型；
+`agent model remove` 可移除失效模型。初始注册表为空。
+
 ---
 
 # Phase 3 — Registry
 
-实现：
+实现用户管理的 Model Registry 增强：
 
 ```text
 Agent Registry
-Model Registry
+Model Registry（用户管理，运行时增删改）
 Capability Registry
+连接探测（认证 / 可达性）
+状态标记（active / disabled / error）
+计费与能力校验
+变更审计（model_change_log）
 ```
 
 支持动态发现和配置。
@@ -237,7 +246,7 @@ Best Strategy
 可能增加：
 
 ```text
-Web UI
+Web UI（管理后台 + 任务面板）
 REST API
 MCP
 SDK

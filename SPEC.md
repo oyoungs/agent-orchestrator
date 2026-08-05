@@ -104,19 +104,19 @@ Availability
 
 ## FR-002 Model Registry
 
-支持注册：
+支持**运行时注册用户自购模型**。初始注册表为空，系统不内置任何模型配置。
 
 ```text
 Provider
-Model
-Cost
-Context
-Capabilities
-Latency
-Reliability
-Tool Calling
-Streaming
+Model ID
+连接信息（base_url / wire protocol）
+计费方式与单价
+支持能力（Context / Tool Calling / Streaming / Reasoning / Modalities / Max Output）
+认证引用（凭据不落库明文）
+可用状态（active / disabled / error）
 ```
+
+模型通过管理入口（守护进程运行后，CLI 或 WebUI）添加、更新、移除。
 
 ---
 
@@ -219,6 +219,44 @@ Failure Rate
 
 ---
 
+## FR-013 Model Management
+
+支持通过管理入口（daemon 运行后）管理模型生命周期：
+
+```text
+添加模型        记录连接信息、计费方式、支持能力
+查看 / 更新     修改价格、能力、连接、状态
+移除模型        API 失效（如忘记续费）时允许删除
+禁用 / 启用     临时下线，不影响注册记录
+连接探测        可选，验证认证与可达性，失败标记 error
+```
+
+所有变更记录审计日志（谁 / 何时 / 改了什么）。
+
+---
+
+## FR-014 Daemon & Management Interface
+
+项目后台守护进程（daemon）承载：
+
+```text
+SQLite 存储
+任务队列
+Model Registry
+Management API
+```
+
+管理方式：
+
+```text
+CLI 工具（MVP）   agent model add / list / update / remove / disable
+WebUI（后续）      管理后台，复用同一 API
+```
+
+初始项目不含任何模型配置，必须由用户添加后才能执行依赖模型的任务。
+
+---
+
 # 5. Non-functional Requirements
 
 系统必须：
@@ -251,6 +289,20 @@ Agent
 Model
 Parallelism
 Retry
+```
+
+模型管理入口（守护进程运行后）：
+
+```bash
+agent model add qwen3 \
+  --provider openai-compatible \
+  --base-url https://api.example.com/v1 \
+  --model-id qwen3-max \
+  --billing pay-as-you-go \
+  --price-input 0.5 --price-output 1.5
+
+agent model list
+agent model remove qwen3
 ```
 
 ---
@@ -330,7 +382,8 @@ CLI          agent run <task> 与 agent status
 Workspace    git worktree（有 repo）/ 目录副本（无 repo）混合
 安全边界      复用 Runtime 原生权限 + 高风险动作人工确认
 Agent 接入    ACP 优先（opencode / openclaw / reasonix）+ Claude / Codex 进程适配器
-模型接入      OpenAI 兼容为主，Codex 走 Responses，Claude 走 Anthropic env
+模型接入      不内置任何模型配置；初始注册表为空，用户通过管理入口添加（ADR-0016）
+模型管理      daemon 运行后通过 CLI / WebUI 添加、更新、移除模型（ADR-0017）
 配置格式      TOML
 ```
 

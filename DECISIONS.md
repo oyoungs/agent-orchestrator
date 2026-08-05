@@ -398,7 +398,68 @@ Accepted (2026-08-03)
 - 5/5 Runtime 非交互链路可用；
 - MIMO token-plan（Claude Code 接入）当前 401 Invalid API Key，需用户刷新 token；
 - 免费模型梯队已实测：`opencode/deepseek-v4-flash-free`、`opencode/mimo-v2.5-free`；
-- 本地 oMLX / Ollama 服务未运行。
+- 本地 oMLX / Ollama 服务未运行；
+- 以上均为环境调查基线，**不属于预置模型配置**（见 ADR-0016）。
+
+---
+
+## ADR-0016 Model Registry: User-Managed, No Bundled Configuration
+
+### Status
+
+Accepted (2026-08-05)
+
+### Decision
+
+- 初始项目**没有任何模型配置**，Model Registry 初始为空；
+- 模型通过管理入口（daemon 运行后，CLI 或 WebUI）由用户添加 / 更新 / 移除；
+- 添加时内部记录：
+
+```text
+连接信息    provider / model_id / base_url / wire protocol / 认证引用
+计费方式    free / pay-as-you-go / subscription / token-plan / local + 单价 + 币种
+支持能力    context / tool calling / streaming / reasoning / modalities / max output
+可用状态    active / disabled / error
+```
+
+- 用户可移除失效模型（如忘记续费导致 API 失效）；系统探测失败时标记 error / disabled 供用户处理；
+- Orchestrator 代码不内置任何特定模型的接入实现。
+
+### Reason
+
+用户希望自行管理自己购买的模型（例如新购 Qwen 后自行添加），避免系统与特定模型耦合、避免过时配置随版本分发。
+
+### Consequences
+
+- Router 只基于注册表内模型决策；
+- 模型增删有审计记录（model_change_log）；
+- 凭据只存引用，按 SECURITY.md 隔离。
+
+---
+
+## ADR-0017 Daemon + Management Interface
+
+### Status
+
+Accepted (2026-08-05)
+
+### Decision
+
+- 引入项目后台守护进程（daemon），持有 SQLite 存储、任务队列、Model Registry 与 Management API；
+- Management API：本机回环 HTTP + token 鉴权；
+- CLI 客户端（MVP）：`agent model add / list / update / remove / disable`、`agent run / status`，与 daemon 通信；
+- WebUI 管理后台：后续阶段，复用同一 API；
+- 模型添加 / 移除是运行时操作，无需重启 daemon。
+
+### Reason
+
+用户明确要求「守护进程运行后，通过 CLI 工具或 WebUI 添加自己购买的大模型」。
+
+### Consequences
+
+- 进程模型变为 daemon + client；
+- 状态与注册表持久化在 daemon 的 SQLite 中；
+- CLI 命令分为任务类与模型管理类两组。
 
 ---
 
@@ -413,4 +474,5 @@ ADR-xxxx Validator Policy
 ADR-xxxx Merge Strategy
 ADR-xxxx Sandbox
 ADR-xxxx Orchestrator MCP / SDK
+ADR-xxxx Management WebUI
 ```

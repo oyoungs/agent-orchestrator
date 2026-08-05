@@ -58,6 +58,19 @@ Validator
 Result
 ```
 
+## 管理平面（Daemon）
+
+守护进程持有：
+
+```text
+SQLite 存储
+任务队列
+Model Registry（用户管理，初始为空）
+Management API（本机回环 HTTP + token 鉴权）
+```
+
+CLI 客户端与未来的 WebUI 都通过 Management API 操作模型与任务。模型添加、更新、移除是运行时操作，无需重启 daemon（ADR-0017）。
+
 ---
 
 # 3. Core Components
@@ -72,6 +85,20 @@ agent status         # 查看任务状态 / 最近结果
 ```
 
 未来 API / UI 通过同一 Gateway 接口接入。
+
+## Management Gateway（Daemon）
+
+负责模型与系统配置的运行时管理（FR-013/014）：
+
+```text
+agent model add     添加模型（连接信息 / 计费方式 / 支持能力）
+agent model list    查看已注册模型
+agent model update  修改价格、能力、连接、状态
+agent model remove  移除失效模型
+agent model disable 临时下线
+```
+
+所有变更写入 SQLite 并记录审计日志。初始注册表为空。
 
 ## Router
 
@@ -180,13 +207,15 @@ Codex Adapter      codex exec <prompt> --json --sandbox <mode> -m <model>
 
 ## Model Adapter
 
-MVP 不重复实现模型 API 调用：模型能力由各 Runtime 自身配置提供（ADR-0012）。Model Registry 负责记录 provider / model / 价格 / 能力，用于 Router 决策与成本核算。
+Orchestrator **不内置任何特定模型的接入实现**（ADR-0016）。用户通过管理入口把自己购买的模型加入 Model Registry；运行时按用户存储的连接信息把端点传给所选 Agent Runtime。仅当 Orchestrator 需要直接调用模型（如连接探测）时，才按注册的 wire protocol 发起请求。
 
 ```text
-DeepSeek / MIMO / MiniMax → 各 Runtime 已配置的 OpenAI / Anthropic 兼容端点
-Codex                     → Responses wire API（config.toml）
-Claude Code               → --settings 注入 Anthropic 兼容端点
+OpenAI 兼容  → 默认 wire protocol（DeepSeek / MIMO / MiniMax / Qwen 等）
+Responses    → 供 Codex 使用（用户添加模型时选择）
+Anthropic    → 供 Claude Code 使用（--settings 注入）
 ```
+
+Model Registry 负责记录 provider / model / 计费方式 / 支持能力 / 状态，用于 Router 决策与成本核算（FR-002 / ADR-0012）。
 
 ## Supervisor
 
@@ -241,12 +270,17 @@ available, last_checked_at
 ### model
 
 ```text
-id, provider, model_id, wire_api,
-base_url, auth_ref, context_window, max_output,
-unit_prices (json: input / output / cache_read / cache_write),
-capabilities (json: tool_calling / streaming / reasoning),
-free, available
+id, name, provider, model_id,
+wire_api (openai-compatible | anthropic | responses),
+base_url, auth_ref,
+billing (json: type / unit_prices / currency),
+capabilities (json: context_window / max_output /
+              tool_calling / streaming / reasoning / modalities),
+status (active | disabled | error),
+created_at, updated_at, added_by
 ```
+
+初始为空；由用户通过 Management API 添加（ADR-0016）。
 
 ### worker_run
 
@@ -277,6 +311,7 @@ id, run_id, event_type, ts, payload (json)
 tasks
 agent_runtimes
 models
+model_change_log
 worker_runs
 usage_records
 metric_events
@@ -361,6 +396,12 @@ workspace 外文件写入
 - 从各 Runtime 配置读取，禁止写入日志 / 任务记录 / prompt；
 - 日志组件统一脱敏（key / token / secret / password 字段）。
 
+模型凭据（ADR-0016）：
+
+- 用户添加模型时只保存凭据引用（环境变量名 / 加密文件），禁止明文入库；
+- Management API 仅绑定 127.0.0.1 且需 token 鉴权；
+- 模型变更（add / update / remove / disable）写入审计日志。
+
 ---
 
 # 9. Observability
@@ -389,6 +430,9 @@ metric_events   成功率 / 失败率 / 重试率 / 模型表现 / Agent 表现
 # 10. Configuration（TOML）
 
 ```toml
+# 示例配置。默认安装：模型注册表为空，
+# 需先通过 `agent model add` 添加模型，本文件不含任何模型接入配置。
+
 [orchestrator]
 concurrency = 2
 default_timeout_sec = 300
@@ -415,7 +459,7 @@ sandbox = "workspace-write"
 
 [[agents]]
 id = "opencode"
-model = "opencode/deepseek-v4-flash-free"
+# model = "<已注册模型 id>"  # 示例：模型需先通过 agent model add 添加
 
 [[agents]]
 id = "openclaw"
@@ -424,20 +468,11 @@ gateway = "ws://127.0.0.1:18789"
 
 [[agents]]
 id = "reasonix"
-model = "deepseek-v4-flash"
+# model = "<已注册模型 id>"
 budget = 1
-
-[models.deepseek-v4-flash]
-provider = "deepseek"
-context = 1_000_000
-price_input = 0.14
-price_output = 0.28
-price_cache_read = 0.028
-
-[models.mimo-v2.5-free]
-provider = "opencode"
-free = true
 ```
+
+# 模型注册表（models）不写在静态配置中，由 daemon 运行时管理。
 
 ---
 
@@ -446,7 +481,9 @@ free = true
 ```text
 agent-orchestrator/
 ├── src/
-│   ├── cli/            # run, status
+│   ├── cli/            # run, status, model 管理命令（daemon 客户端）
+│   ├── daemon/         # 守护进程：Management API、注册表、队列宿主
+│   ├── webui/          # 管理后台（后续阶段）
 │   ├── gateway/        # Task Gateway
 │   ├── router/
 │   ├── planner/
@@ -481,6 +518,8 @@ agent-orchestrator/
 | Concurrency Model | 单进程异步 + Worker 进程组 | 0006 |
 | Agent Adapter Protocol | ACP-first 混合 | 0011 |
 | Model Adapter Protocol | OpenAI 兼容为主 + Responses + Anthropic env | 0012 |
+| Model Registry Ownership | 用户运行时管理，初始为空 | 0016 |
+| Management Interface | daemon + CLI（WebUI 后续） | 0017 |
 | MCP Integration | 复用 Runtime 原生 MCP；自身 MCP 化放 Phase 11 | 0011 |
 | Sandbox | Runtime 原生权限 + 审批门 | 0010 |
 | Containerization | 不用（MVP） | 0009 |

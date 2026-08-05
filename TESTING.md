@@ -205,3 +205,21 @@ Claude Code 401 会重试 11 次 → 适配器必须设置进程级硬超时
 成本统计以 provider usage × 配置价格为准，不信任 Agent 上报 cost
 所有适配器必须解析结构化输出（json / jsonl），并单独记录 exit code
 ```
+
+---
+
+# 12. Model Registry & Management Tests
+
+覆盖用户管理的模型生命周期（ADR-0016/0017）：
+
+```text
+初始状态      新项目注册表为空
+添加模型      计费方式、支持能力、连接信息正确落库
+更新模型      价格 / 能力 / 状态修改生效
+移除模型      含 API 失效场景（忘记续费）
+禁用 / 启用   状态切换且不影响注册记录
+连接探测      无效 key → error 状态，可选人工处理
+鉴权          无 token 调用 Management API 被拒绝
+审计          model_change_log 记录每次变更
+并发         并发增删不产生脏数据
+```
