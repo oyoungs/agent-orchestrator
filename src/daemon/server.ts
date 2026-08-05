@@ -7,11 +7,13 @@ import { ModelRegistry } from "../registry/modelRegistry.ts";
 import { NoModelsError, RouterError } from "../router/router.ts";
 import { safeEqual } from "../security/token.ts";
 import type { TaskService } from "../gateway/taskService.ts";
+import { readOutputEvents } from "./output.ts";
 
 export interface ServerContext {
   registry: ModelRegistry;
   taskService: TaskService;
   logger: Logger;
+  stateDir: string;
   onShutdown: () => void;
 }
 
@@ -55,8 +57,8 @@ async function handle(ctx: ServerContext, req: IncomingMessage, res: ServerRespo
       setTimeout(() => ctx.onShutdown(), 50);
       return;
     }
-    if (resource === "models") return handleModels(ctx, req, res, id, sub);
-    if (resource === "tasks") return handleTasks(ctx, req, res, id, sub);
+    if (resource === "models") return await handleModels(ctx, req, res, id, sub);
+    if (resource === "tasks") return await handleTasks(ctx, req, res, id, sub, url.searchParams);
     sendJson(res, 404, { error: { code: "NOT_FOUND", message: `unknown resource: ${resource}` } });
   } catch (err) {
     mapError(res, err);
@@ -123,6 +125,7 @@ async function handleTasks(
   res: ServerResponse,
   id?: string,
   sub?: string,
+  search?: URLSearchParams,
 ): Promise<void> {
   const svc = ctx.taskService;
   if (!id) {
@@ -139,6 +142,11 @@ async function handleTasks(
     const task = svc.cancel(id);
     ctx.logger.info("task.cancelled", { taskId: id });
     return sendJson(res, 200, task);
+  }
+  if (sub === "output" && req.method === "GET") {
+    const raw = Number(search?.get("after") ?? 0);
+    const after = Number.isFinite(raw) ? Math.max(0, raw) : 0;
+    return sendJson(res, 200, readOutputEvents(ctx.stateDir, id, after));
   }
   if (req.method === "GET") return sendJson(res, 200, svc.get(id));
   return sendJson(res, 405, { error: { code: "METHOD_NOT_ALLOWED", message: `unsupported ${req.method}` } });

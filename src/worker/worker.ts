@@ -66,18 +66,21 @@ export async function executeTask(deps: WorkerDeps, task: Task): Promise<void> {
       budgetUsd: 0.5,
     };
     let lastUsage: AdapterUsage | undefined;
+    let lastAgentResult: string | undefined;
     for await (const event of adapter.invoke(input)) {
       appendFileSync(outputFile, JSON.stringify(event) + "\n");
       if (event.type === "usage") {
         lastUsage = event.usage;
         insertUsage(deps, runId, model, event.usage, startedAt);
+      } else if (event.type === "finished" && event.result) {
+        lastAgentResult = event.result;
       } else if (event.type === "error") {
         throw new WorkerFailure(event.message, event.errorClass);
       }
     }
 
     const validation = await deps.validator.run(task.type, ws);
-    const summary = JSON.stringify(validation);
+    const summary = JSON.stringify({ agentResult: lastAgentResult ?? null, validation });
     if (validation.ok) {
       deps.taskRepo.updateStatus(task.id, "succeeded", { finishedAt: Date.now(), resultSummary: summary });
       deps.logger.info("task.succeeded", { taskId: task.id, checks: validation.checks.map((c) => c.name).join(",") });

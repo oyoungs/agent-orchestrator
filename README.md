@@ -153,8 +153,8 @@ node src/cli/index.ts model add \
 # 3. 提交任务
 node src/cli/index.ts run "Reply with exactly one word: PONG"
 
-# 4. 查看状态 / 移除模型 / 停止
-node src/cli/index.ts status
+# 4. 查看状态（含执行过程回放）/ 移除模型 / 停止
+node src/cli/index.ts status <task-id>
 node src/cli/index.ts model remove <model-id>
 node src/cli/index.ts daemon stop
 ```

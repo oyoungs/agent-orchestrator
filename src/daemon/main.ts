@@ -55,7 +55,7 @@ const pidFile = join(stateDir, "daemon.pid");
 writeFileSync(pidFile, String(process.pid), { mode: 0o600 });
 
 const { server, port } = await startServer(
-  { registry, taskService, logger, onShutdown: shutdown },
+  { registry, taskService, logger, stateDir, onShutdown: shutdown },
   { host: config.daemon.host, port: config.daemon.port, token },
 );
 writeState(stateDir, { port, tokenFile: join(stateDir, "daemon.token"), pid: process.pid });
