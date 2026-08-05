@@ -79,6 +79,14 @@ export interface Task {
   routingInfo: string | null;
 }
 
+export interface Session {
+  id: string;
+  title: string | null;
+  createdAt: number;
+  updatedAt: number;
+  taskCount?: number;
+}
+
 export interface UsageRecord {
   id: string;
   runId: string;

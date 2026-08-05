@@ -10,6 +10,7 @@ import { Router } from "../router/router.ts";
 import { Scheduler } from "../scheduler/scheduler.ts";
 import { loadOrCreateToken } from "../security/token.ts";
 import { openDb, closeDb } from "../store/db.ts";
+import { SessionRepo } from "../store/sessionRepo.ts";
 import { TaskRepo } from "../store/taskRepo.ts";
 import { Validator } from "../validator/validator.ts";
 import { executeTask, type WorkerDeps } from "../worker/worker.ts";
@@ -24,6 +25,7 @@ const { token } = loadOrCreateToken(stateDir);
 const logger: Logger = createLogger({ stateDir });
 
 const taskRepo = new TaskRepo(db);
+const sessionRepo = new SessionRepo(db);
 const registry = new ModelRegistry(db);
 const router = new Router();
 const workspace = new WorkspaceManager(PROJECT_ROOT, stateDir);
@@ -32,7 +34,7 @@ const validator = new Validator();
 
 const deps: WorkerDeps = { taskRepo, registry, workspace, adapters, validator, logger, config, stateDir };
 const scheduler = new Scheduler(config.orchestrator.concurrency, (task) => executeTask(deps, task));
-const taskService = new TaskService(taskRepo, router, registry, scheduler);
+const taskService = new TaskService(taskRepo, router, registry, scheduler, sessionRepo);
 
 // 崩溃恢复：启动时把悬挂任务标记为 interrupted（ADR-0017）
 taskRepo.markInterrupted();

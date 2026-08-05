@@ -113,4 +113,26 @@ ALTER TABLE tasks ADD COLUMN routing_info TEXT;
 ALTER TABLE tasks ADD COLUMN session_key TEXT;
 `,
   },
+  {
+    version: 3,
+    sql: `
+CREATE TABLE sessions (
+  id         TEXT PRIMARY KEY,
+  title      TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+-- 回填：把历史 session_key（原根任务 id）升级为正式会话
+INSERT INTO sessions (id, title, created_at, updated_at)
+SELECT
+  t1.session_key,
+  (SELECT t2.prompt FROM tasks t2 WHERE t2.session_key = t1.session_key ORDER BY t2.created_at ASC LIMIT 1),
+  MIN(t1.created_at),
+  MAX(t1.updated_at)
+FROM tasks t1
+WHERE t1.session_key IS NOT NULL
+GROUP BY t1.session_key;
+`,
+  },
 ];

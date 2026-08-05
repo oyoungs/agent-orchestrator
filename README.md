@@ -155,9 +155,10 @@ node src/cli/index.ts run "Reply with exactly one word: PONG"
 
 # 3.1 交互模式（推荐）：免费模型分析路由 + 实时思考状态 + 会话续接
 node src/cli/index.ts chat
-node src/cli/index.ts chat --resume <task-id>   # 继续已有会话
+node src/cli/index.ts chat --resume <session-id 或 task-id>   # 恢复历史会话/项目
+# 首次输入自动创建会话/项目，之后每个任务自动追加到该会话的任务队列
 # chat 中模型输出实时渲染 Markdown（标题/加粗/列表/代码块/表格等）
-# chat 内可用 /help /history /resume <id> /tasks /models /model <id> /quit
+# chat 内可用 /help /history /sessions /resume <id> /tasks /models /model <id> /quit
 
 # 4. 查看状态（含执行过程回放）/ 移除模型 / 停止
 node src/cli/index.ts status <task-id>

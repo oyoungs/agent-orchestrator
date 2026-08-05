@@ -14,6 +14,7 @@ describe("store", () => {
         "tasks",
         "agent_runtimes",
         "models",
+        "sessions",
         "model_change_log",
         "worker_runs",
         "usage_records",

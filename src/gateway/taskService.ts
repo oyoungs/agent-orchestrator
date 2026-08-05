@@ -1,9 +1,11 @@
+import { randomUUID } from "node:crypto";
 import { analyzeWithFreeModel, type TaskAnalysis } from "../router/analyzer.ts";
 import { ModelRegistry } from "../registry/modelRegistry.ts";
 import { Router } from "../router/router.ts";
 import { Scheduler } from "../scheduler/scheduler.ts";
+import { SessionRepo } from "../store/sessionRepo.ts";
 import { TaskRepo } from "../store/taskRepo.ts";
-import type { ModelRecord, Task, TaskType } from "../types.ts";
+import type { ModelRecord, Session, Task, TaskType } from "../types.ts";
 
 export type Analyzer = (prompt: string, freeModel: ModelRecord) => Promise<TaskAnalysis | null>;
 
@@ -22,6 +24,7 @@ export class TaskService {
   private readonly router: Router;
   private readonly registry: ModelRegistry;
   private readonly scheduler: Scheduler;
+  private readonly sessions: SessionRepo;
   private readonly analyzer: Analyzer;
 
   constructor(
@@ -29,16 +32,18 @@ export class TaskService {
     router: Router,
     registry: ModelRegistry,
     scheduler: Scheduler,
+    sessions: SessionRepo,
     analyzer: Analyzer = analyzeWithFreeModel,
   ) {
     this.repo = repo;
     this.router = router;
     this.registry = registry;
     this.scheduler = scheduler;
+    this.sessions = sessions;
     this.analyzer = analyzer;
   }
 
-  submit(prompt: string, opts: { modelId?: string; parentId?: string } = {}): Task {
+  submit(prompt: string, opts: { modelId?: string; parentId?: string; sessionId?: string } = {}): Task {
     const trimmed = prompt.trim();
     if (!trimmed) throw new TaskError("prompt is required", "INVALID_PROMPT");
 
@@ -47,7 +52,13 @@ export class TaskService {
       const parent = this.repo.get(opts.parentId);
       if (!parent) throw new TaskError("parent task not found", "PARENT_NOT_FOUND");
       sessionKey = parent.sessionKey ?? parent.id;
+    } else if (opts.sessionId) {
+      sessionKey = opts.sessionId;
+    } else {
+      // 首次输入：自动创建新会话/项目
+      sessionKey = randomUUID();
     }
+    this.sessions.ensure(sessionKey, trimmed);
 
     let modelId: string | null = null;
     if (opts.modelId) {
@@ -96,6 +107,21 @@ export class TaskService {
       current = current.parentId ? this.repo.get(current.parentId) : undefined;
     }
     return chain;
+  }
+
+  getSession(id: string): Session {
+    const session = this.sessions.get(id);
+    if (!session) throw new TaskError("session not found", "SESSION_NOT_FOUND");
+    return session;
+  }
+
+  listSessions(): Session[] {
+    return this.sessions.list();
+  }
+
+  sessionTasks(id: string): Task[] {
+    this.getSession(id);
+    return this.sessions.tasksOf(id);
   }
 
   cancel(id: string): Task {

@@ -10,11 +10,16 @@ export interface ChatOptions {
   resumeTaskId?: string;
 }
 
+interface ResolvedSession {
+  sessionId: string;
+  session: { id: string; title: string | null; taskCount?: number };
+  tasks: any[];
+}
+
 export async function chat(client: DaemonClient, opts: ChatOptions = {}): Promise<void> {
   const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: process.stdin.isTTY });
   rl.setPrompt("你> ");
 
-  // 行缓冲：从创建起持续收集输入，避免异步处理期间丢失管道行
   let inputClosed = false;
   const lines: string[] = [];
   const waiters: Array<(v: string | null) => void> = [];
@@ -37,25 +42,22 @@ export async function chat(client: DaemonClient, opts: ChatOptions = {}): Promis
     return new Promise((resolve) => waiters.push(resolve));
   };
 
-  let lastTaskId: string | undefined = opts.resumeTaskId;
+  let activeSessionId: string | undefined;
+  let lastTaskId: string | undefined;
   let preferredModelId: string | undefined;
 
   console.log("Agent Orchestrator 交互模式 — 输入任务描述，Ctrl+C 或 /quit 退出");
-  if (lastTaskId) {
-    try {
-      const chain = (await client.request("GET", `/v1/tasks/${lastTaskId}/chain`)) as any[];
-      console.log(`已恢复会话：共 ${chain.length} 轮历史`);
-      for (const t of chain) {
-        const result = agentResultOf(t);
-        console.log(`  [${t.type}] ${String(t.prompt).slice(0, 80)}${result ? `\n    → ${result.slice(0, 120)}` : ""}`);
-      }
-      lastTaskId = chain[chain.length - 1]?.id ?? lastTaskId;
-    } catch {
-      console.log("无法恢复该会话（任务不存在）");
-      lastTaskId = undefined;
+  if (opts.resumeTaskId) {
+    const resolved = await resolveSession(client, opts.resumeTaskId);
+    if (resolved) {
+      activeSessionId = resolved.sessionId;
+      lastTaskId = resolved.tasks.at(-1)?.id;
+      printSessionBanner(resolved);
+    } else {
+      console.log(`无法恢复 ${opts.resumeTaskId}（session 或 task 不存在）`);
     }
   } else {
-    console.log("每条消息都会先经免费模型分析路由，再选择更合适的模型执行；/help 查看命令");
+    console.log("尚未创建会话/项目——第一条消息将自动创建；/help 查看命令");
   }
 
   while (true) {
@@ -69,26 +71,58 @@ export async function chat(client: DaemonClient, opts: ChatOptions = {}): Promis
         console.log("bye");
         break;
       }
-      await handleCommand(client, input, () => lastTaskId, (id) => (lastTaskId = id), (id) => (preferredModelId = id));
-    } else {
-      lastTaskId = await runTurn(client, input, lastTaskId, preferredModelId);
+      await handleCommand(
+        client,
+        input,
+        () => activeSessionId,
+        (id) => (activeSessionId = id),
+        (id) => (lastTaskId = id),
+        (id) => (preferredModelId = id),
+      );
+      continue;
     }
+
+    const body: Record<string, unknown> = { prompt: input };
+    if (activeSessionId) body.sessionId = activeSessionId;
+    if (lastTaskId) body.parentId = lastTaskId;
+    if (preferredModelId) body.modelId = preferredModelId;
+    const task = await client.request("POST", "/v1/tasks", body);
+    if (!activeSessionId) {
+      activeSessionId = task.sessionKey;
+      console.log(`📁 已创建新会话/项目：${activeSessionId}（/resume 可恢复）`);
+    }
+    lastTaskId = await runTurn(client, task.id);
+    console.log(`（输入下一条消息继续追加到会话 ${activeSessionId?.slice(0, 8)}，/help 查看命令）`);
   }
   if (!inputClosed) rl.close();
 }
 
-async function runTurn(
-  client: DaemonClient,
-  prompt: string,
-  lastTaskId: string | undefined,
-  preferredModelId: string | undefined,
-): Promise<string> {
-  const body: Record<string, unknown> = { prompt };
-  if (lastTaskId) body.parentId = lastTaskId;
-  if (preferredModelId) body.modelId = preferredModelId;
-  const task = await client.request("POST", "/v1/tasks", body);
-  console.log(`· 任务 ${task.id.slice(0, 8)} 已提交${task.status === "analyzing" ? "，免费模型分析中…" : ""}`);
+/** 解析 session id 或 task id → 所属会话 */
+async function resolveSession(client: DaemonClient, id: string): Promise<ResolvedSession | null> {
+  try {
+    const res = await client.request("GET", `/v1/sessions/${id}`);
+    return { sessionId: res.session.id, session: res.session, tasks: res.tasks };
+  } catch {
+    try {
+      const task = await client.request("GET", `/v1/tasks/${id}`);
+      const res = await client.request("GET", `/v1/sessions/${task.sessionKey}`);
+      return { sessionId: res.session.id, session: res.session, tasks: res.tasks };
+    } catch {
+      return null;
+    }
+  }
+}
 
+function printSessionBanner(resolved: ResolvedSession): void {
+  console.log(`📁 会话/项目 ${resolved.sessionId}`);
+  console.log(`   标题：${resolved.session.title ?? "-"} · 任务数：${resolved.tasks.length}`);
+  for (const t of resolved.tasks) {
+    console.log(`   [${t.type} · ${t.status}] ${String(t.prompt).slice(0, 80)}`);
+  }
+}
+
+async function runTurn(client: DaemonClient, taskId: string): Promise<string> {
+  console.log(`· 任务 ${taskId.slice(0, 8)} 已提交`);
   const spinner = new Spinner();
   let mdStream: MarkdownStream | null = null;
   let printed = 0;
@@ -99,7 +133,7 @@ async function runTurn(
   let routingModel: string | undefined;
 
   for (let i = 0; i < 600; i += 1) {
-    const current = await client.request("GET", `/v1/tasks/${task.id}`);
+    const current = await client.request("GET", `/v1/tasks/${taskId}`);
     if (!analysisShown && current.status === "analyzing") {
       analysisShown = true;
       spinner.start("分析中…（免费模型）");
@@ -118,7 +152,7 @@ async function runTurn(
       thinkingShown = true;
       spinner.start(`模型 ${routingModel ?? "…"} 正在思考`);
     }
-    const out = await client.request("GET", `/v1/tasks/${task.id}/output?after=${printed}`);
+    const out = await client.request("GET", `/v1/tasks/${taskId}/output?after=${printed}`);
     if (out.events?.length) {
       for (const ev of out.events) {
         if (ev.type === "thinking" && !sawText && !thinkingShown) spinner.start(`模型 ${ev.model} 正在思考`);
@@ -145,64 +179,76 @@ async function runTurn(
       spinner.stop();
       mdStream?.finish();
       printChatResult(current);
-      console.log("（输入下一条消息继续追加对话，/help 查看历史与管理命令）");
       return current.id;
     }
     await sleep(800);
   }
   spinner.stop();
   console.error("任务未在轮询窗口内完成");
-  return task.id;
+  return taskId;
 }
 
 async function handleCommand(
   client: DaemonClient,
   input: string,
-  getLast: () => string | undefined,
-  setLast: (id: string) => void,
+  getSession: () => string | undefined,
+  setSession: (id: string | undefined) => void,
+  setLast: (id: string | undefined) => void,
   setPreferredModel: (id: string | undefined) => void,
 ): Promise<void> {
   const [cmd, arg] = input.split(/\s+/, 2);
   switch (cmd) {
     case "/help":
       console.log(`命令列表：
-  /help          帮助
-  /history       当前会话历史（任务链）
-  /resume <id>   恢复指定历史会话（任务链）
-  /tasks         最近任务列表
-  /models        已注册模型
-  /model <id>    指定下一个任务使用的模型（/models 查看 id）
-  /quit, /exit   退出`);
+  /help            帮助
+  /history         当前会话任务队列
+  /sessions        列出历史会话/项目
+  /resume <id>     恢复历史会话/项目（session 或 task id）
+  /tasks           最近任务列表
+  /models          已注册模型
+  /model <id>      指定下一个任务使用的模型（/models 查看 id）
+  /quit, /exit     退出`);
       break;
     case "/resume": {
       if (!arg) {
-        console.log("用法：/resume <task-id>（/tasks 或 /history 查看 id）");
+        console.log("用法：/resume <session-id 或 task-id>（/sessions 或 /tasks 查看）");
         break;
       }
-      try {
-        const chain = (await client.request("GET", `/v1/tasks/${arg}/chain`)) as any[];
-        const last = chain[chain.length - 1];
-        setLast(last?.id ?? arg);
-        console.log(`已切换到会话：共 ${chain.length} 轮历史`);
-        for (const t of chain) {
-          const result = agentResultOf(t);
-          console.log(`  [${t.type} · ${t.status}] ${String(t.prompt).slice(0, 100)}${result ? `\n    → ${result.slice(0, 120)}` : ""}`);
-        }
-      } catch {
-        console.log(`任务 ${arg} 不存在，无法恢复`);
+      const resolved = await resolveSession(client, arg);
+      if (!resolved) {
+        console.log(`无法恢复 ${arg}（session 或 task 不存在）`);
+        break;
       }
+      setSession(resolved.sessionId);
+      setLast(resolved.tasks.at(-1)?.id);
+      printSessionBanner(resolved);
       break;
     }
     case "/history": {
-      const last = getLast();
-      if (!last) {
-        console.log("当前还没有任务");
+      const sessionId = getSession();
+      if (!sessionId) {
+        console.log("当前还没有会话");
         break;
       }
-      const chain = (await client.request("GET", `/v1/tasks/${last}/chain`)) as any[];
-      for (const t of chain) {
+      const res = await client.request("GET", `/v1/sessions/${sessionId}`);
+      if (res.tasks.length === 0) {
+        console.log("会话中还没有任务");
+        break;
+      }
+      for (const t of res.tasks) {
         const result = agentResultOf(t);
         console.log(`  [${t.type} · ${t.status}] ${String(t.prompt).slice(0, 100)}${result ? `\n    → ${result.slice(0, 150)}` : ""}`);
+      }
+      break;
+    }
+    case "/sessions": {
+      const sessions = (await client.request("GET", "/v1/sessions")) as any[];
+      if (sessions.length === 0) {
+        console.log("暂无会话/项目");
+        break;
+      }
+      for (const s of sessions) {
+        console.log(`  ${s.id} · ${String(s.title ?? "-").slice(0, 40)} · ${s.taskCount ?? 0} 个任务`);
       }
       break;
     }

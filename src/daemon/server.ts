@@ -59,6 +59,7 @@ async function handle(ctx: ServerContext, req: IncomingMessage, res: ServerRespo
     }
     if (resource === "models") return await handleModels(ctx, req, res, id, sub);
     if (resource === "tasks") return await handleTasks(ctx, req, res, id, sub, url.searchParams);
+    if (resource === "sessions") return await handleSessions(ctx, req, res, id);
     sendJson(res, 404, { error: { code: "NOT_FOUND", message: `unknown resource: ${resource}` } });
   } catch (err) {
     mapError(res, err);
@@ -134,6 +135,7 @@ async function handleTasks(
       const task = svc.submit(String(body?.prompt ?? ""), {
         modelId: body?.modelId !== undefined ? String(body.modelId) : undefined,
         parentId: body?.parentId !== undefined ? String(body.parentId) : undefined,
+        sessionId: body?.sessionId !== undefined ? String(body.sessionId) : undefined,
       });
       ctx.logger.info("task.submitted", { taskId: task.id, type: task.type });
       return sendJson(res, 201, task);
@@ -156,6 +158,22 @@ async function handleTasks(
   }
   if (req.method === "GET") return sendJson(res, 200, svc.get(id));
   return sendJson(res, 405, { error: { code: "METHOD_NOT_ALLOWED", message: `unsupported ${req.method}` } });
+}
+
+async function handleSessions(
+  ctx: ServerContext,
+  req: IncomingMessage,
+  res: ServerResponse,
+  id?: string,
+): Promise<void> {
+  if (req.method !== "GET") {
+    return sendJson(res, 405, { error: { code: "METHOD_NOT_ALLOWED", message: `unsupported ${req.method}` } });
+  }
+  if (id) {
+    const session = ctx.taskService.getSession(id);
+    return sendJson(res, 200, { session, tasks: ctx.taskService.sessionTasks(id) });
+  }
+  return sendJson(res, 200, ctx.taskService.listSessions());
 }
 
 async function readJson(req: IncomingMessage): Promise<Record<string, unknown> | null> {

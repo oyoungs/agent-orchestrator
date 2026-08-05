@@ -116,7 +116,8 @@ Agent Adapter：ACP-first（opencode / openclaw / reasonix）+ Claude / Codex �
 
 验收（交互）：`agent chat` 中每次输入先显示
 「免费模型分析中 → 已选择模型 X → 模型 X 正在思考 → 流式结果」，
-继续输入自动追加为同一会话（parentId 链），`/history` 可回看。
+继续输入自动追加为同一会话/项目（任务队列），`/history` 可回看；
+首次输入自动创建 session，`/resume <session-id>` 或 `--resume` 可恢复历史会话。
 
 ---
 
