@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { cpSync, existsSync, lstatSync, mkdirSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
@@ -23,11 +23,27 @@ export class WorkspaceManager {
   allocate(taskId: string, targetDir?: string): string {
     const ws = join(this.workspaceBase, taskId);
     mkdirSync(ws, { recursive: true });
-    const src = targetDir ?? this.fallbackRoot;
+    const srcRaw = targetDir ?? this.fallbackRoot;
+    let src = srcRaw;
+    try {
+      src = realpathSync(srcRaw);
+    } catch {
+      // 保留原路径（不存在时下方 existsSync 兜底）
+    }
     if (!existsSync(src)) return ws;
     cpSync(src, ws, {
       recursive: true,
-      filter: (src) => !SKIP_DIRS.has(basename(src)),
+      filter: (src) => {
+        if (SKIP_DIRS.has(basename(src))) return false;
+        try {
+          const st = lstatSync(src);
+          // 跳过 socket / FIFO / 设备等特殊文件（cpSync 会因它们抛 "Unreachable code"）
+          if (!st.isDirectory() && !st.isFile()) return false;
+        } catch {
+          return false;
+        }
+        return true;
+      },
     });
     return ws;
   }
