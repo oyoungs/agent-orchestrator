@@ -169,6 +169,18 @@ node src/cli/index.ts daemon stop
 
 开发验证：`pnpm typecheck` / `pnpm test`。
 
+## 一键部署
+
+```bash
+bash scripts/deploy.sh install      # 安装：依赖 + CLI 入口（agent）+ PATH symlink
+bash scripts/deploy.sh upgrade      # 升级：拉取最新代码 + 重建 + 重启 daemon
+bash scripts/deploy.sh uninstall    # 卸载：停止 daemon + 移除入口（数据保留）
+bash scripts/deploy.sh uninstall --purge   # 卸载并删除数据（任务/会话/模型注册表）
+bash scripts/deploy.sh status       # 查看安装状态
+```
+
+安装后 `agent` 命令可用（若提示 PATH 未包含目标目录，按提示导出后重开终端）。
+
 ---
 
 ## Architecture

@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "deploy": "bash scripts/deploy.sh"
   },
   "engines": {
     "node": ">=24"
