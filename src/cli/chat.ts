@@ -107,7 +107,7 @@ export async function chat(client: DaemonClient, opts: ChatOptions = {}): Promis
       continue;
     }
 
-    const body: Record<string, unknown> = { prompt: input };
+    const body: Record<string, unknown> = { prompt: input, cwd: process.cwd() };
     if (activeSessionId) body.sessionId = activeSessionId;
     if (lastTaskId) body.parentId = lastTaskId;
     if (preferredModelId) body.modelId = preferredModelId;

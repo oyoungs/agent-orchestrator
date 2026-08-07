@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { existsSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import { analyzeWithFreeModel, type TaskAnalysis } from "../router/analyzer.ts";
 import { ModelRegistry } from "../registry/modelRegistry.ts";
 import { Router } from "../router/router.ts";
@@ -43,9 +45,17 @@ export class TaskService {
     this.analyzer = analyzer;
   }
 
-  submit(prompt: string, opts: { modelId?: string; parentId?: string; sessionId?: string } = {}): Task {
+  submit(prompt: string, opts: { modelId?: string; parentId?: string; sessionId?: string; cwd?: string } = {}): Task {
     const trimmed = prompt.trim();
     if (!trimmed) throw new TaskError("prompt is required", "INVALID_PROMPT");
+
+    let targetDir: string | null = null;
+    if (opts.cwd) {
+      targetDir = resolve(opts.cwd);
+      if (!existsSync(targetDir) || !statSync(targetDir).isDirectory()) {
+        throw new TaskError(`working directory not found: ${targetDir}`, "INVALID_CWD");
+      }
+    }
 
     let sessionKey: string | null = null;
     if (opts.parentId) {
@@ -73,6 +83,7 @@ export class TaskService {
       modelId,
       parentId: opts.parentId ?? null,
       sessionKey,
+      targetDir,
     });
 
     if (modelId) {

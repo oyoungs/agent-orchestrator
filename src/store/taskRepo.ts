@@ -6,6 +6,7 @@ interface TaskRow {
   id: string;
   parent_id: string | null;
   session_key: string | null;
+  target_dir: string | null;
   dag_group: string | null;
   type: string;
   prompt: string;
@@ -28,6 +29,7 @@ function rowToTask(row: TaskRow): Task {
     id: row.id,
     parentId: row.parent_id,
     sessionKey: row.session_key,
+    targetDir: row.target_dir,
     dagGroup: row.dag_group,
     type: row.type as TaskType,
     prompt: row.prompt,
@@ -59,6 +61,7 @@ export class TaskRepo {
     modelId?: string | null;
     parentId?: string | null;
     sessionKey?: string | null;
+    targetDir?: string | null;
     routingInfo?: string | null;
   }): Task {
     const now = Date.now();
@@ -66,6 +69,7 @@ export class TaskRepo {
       id: randomUUID(),
       parentId: input.parentId ?? null,
       sessionKey: input.sessionKey ?? null,
+      targetDir: input.targetDir ?? null,
       dagGroup: null,
       type: input.type,
       prompt: input.prompt,
@@ -85,14 +89,15 @@ export class TaskRepo {
     this.db
       .prepare(
         `INSERT INTO tasks
-           (id, parent_id, session_key, dag_group, type, prompt, status, agent_id, model_id,
+           (id, parent_id, session_key, target_dir, dag_group, type, prompt, status, agent_id, model_id,
             workspace_id, priority, retry_count, created_at, updated_at, started_at, finished_at, result_summary, routing_info)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         task.id,
         task.parentId,
         task.sessionKey,
+        task.targetDir,
         task.dagGroup,
         task.type,
         task.prompt,
@@ -130,7 +135,7 @@ export class TaskRepo {
       .prepare(
         `UPDATE tasks SET status = ?, agent_id = ?, model_id = ?, workspace_id = ?,
            started_at = ?, finished_at = ?, result_summary = ?, retry_count = ?,
-           type = ?, session_key = ?, routing_info = ?, updated_at = ?
+           type = ?, session_key = ?, target_dir = ?, routing_info = ?, updated_at = ?
          WHERE id = ?`,
       )
       .run(
@@ -144,6 +149,7 @@ export class TaskRepo {
         next.retryCount,
         next.type,
         next.sessionKey,
+        next.targetDir,
         next.routingInfo,
         next.updatedAt,
         id,

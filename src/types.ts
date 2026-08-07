@@ -62,6 +62,7 @@ export interface Task {
   id: string;
   parentId: string | null;
   sessionKey: string | null;
+  targetDir: string | null;
   dagGroup: string | null;
   type: TaskType;
   prompt: string;

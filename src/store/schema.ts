@@ -141,4 +141,10 @@ GROUP BY t1.session_key;
 ALTER TABLE sessions ADD COLUMN context TEXT NOT NULL DEFAULT '';
 `,
   },
+  {
+    version: 5,
+    sql: `
+ALTER TABLE tasks ADD COLUMN target_dir TEXT;
+`,
+  },
 ];

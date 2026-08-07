@@ -28,7 +28,7 @@ const taskRepo = new TaskRepo(db);
 const sessionRepo = new SessionRepo(db);
 const registry = new ModelRegistry(db);
 const router = new Router();
-const workspace = new WorkspaceManager(PROJECT_ROOT, stateDir);
+const workspace = new WorkspaceManager(PROJECT_ROOT);
 const adapters = new AdapterFactory(config.agents);
 const validator = new Validator();
 

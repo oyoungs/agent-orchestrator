@@ -11,21 +11,21 @@ const SKIP_DIRS = new Set([".git", "node_modules", ".agent-orchestrator", "dist"
  * 默认使用系统临时目录（`<tmpdir>/agent-orchestrator-ws/<taskId>`）。
  */
 export class WorkspaceManager {
-  private readonly projectRoot: string;
-  private readonly stateDir: string;
+  private readonly fallbackRoot: string;
   private readonly workspaceBase: string;
 
-  constructor(projectRoot: string, stateDir: string, workspaceBase?: string) {
-    this.projectRoot = projectRoot;
-    this.stateDir = stateDir;
+  constructor(fallbackRoot: string, workspaceBase?: string) {
+    this.fallbackRoot = fallbackRoot;
     this.workspaceBase = workspaceBase ?? join(tmpdir(), "agent-orchestrator-ws");
   }
 
-  allocate(taskId: string): string {
+  /** 以任务目标目录为源复制 workspace；缺省回退到项目根 */
+  allocate(taskId: string, targetDir?: string): string {
     const ws = join(this.workspaceBase, taskId);
     mkdirSync(ws, { recursive: true });
-    if (!existsSync(this.projectRoot)) return ws;
-    cpSync(this.projectRoot, ws, {
+    const src = targetDir ?? this.fallbackRoot;
+    if (!existsSync(src)) return ws;
+    cpSync(src, ws, {
       recursive: true,
       filter: (src) => !SKIP_DIRS.has(basename(src)),
     });

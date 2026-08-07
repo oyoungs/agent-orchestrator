@@ -89,7 +89,7 @@ export class OpenCodeAdapter implements AgentAdapter {
     }
     const child = spawn("opencode", args, {
       cwd: input.cwd,
-      env: { ...process.env, ...input.env },
+      env: { ...process.env, PWD: input.cwd, ...input.env },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stderrTail = "";

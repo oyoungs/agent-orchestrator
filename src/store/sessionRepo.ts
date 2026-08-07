@@ -80,6 +80,7 @@ export class SessionRepo {
       id: String(row.id),
       parentId: row.parent_id === null ? null : String(row.parent_id),
       sessionKey: row.session_key === null ? null : String(row.session_key),
+      targetDir: row.target_dir === null ? null : String(row.target_dir),
       dagGroup: row.dag_group === null ? null : String(row.dag_group),
       type: String(row.type) as Task["type"],
       prompt: String(row.prompt),

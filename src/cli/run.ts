@@ -6,7 +6,7 @@ import { MarkdownStream, renderMarkdown } from "./markdown.ts";
 const TERMINAL = new Set(["succeeded", "failed", "validation_failed", "cancelled", "timed_out"]);
 
 export async function runTask(client: DaemonClient, prompt: string): Promise<void> {
-  const task = await client.request("POST", "/v1/tasks", { prompt });
+  const task = await client.request("POST", "/v1/tasks", { prompt, cwd: process.cwd() });
   console.log(`task ${task.id} submitted · type=${task.type}${task.status === "analyzing" ? " · analyzing" : ""}`);
   const spinner = new Spinner();
   let mdStream: MarkdownStream | null = null;

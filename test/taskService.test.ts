@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { TaskService } from "../src/gateway/taskService.ts";
 import { ModelRegistry } from "../src/registry/modelRegistry.ts";
 import { Router } from "../src/router/router.ts";
@@ -102,6 +105,33 @@ describe("TaskService", () => {
       expect(t1.sessionKey).toBeTruthy();
       expect(t2.sessionKey).toBe(t1.sessionKey);
     } finally {
+      cleanup();
+    }
+  });
+
+  it("stores the submit working directory as task targetDir", () => {
+    const { db, cleanup } = tempDb();
+    const dir = mkdtempSync(join(tmpdir(), "ao-cwd-"));
+    try {
+      const repo = new TaskRepo(db);
+      const registry = new ModelRegistry(db);
+      const model = registry.create({
+        name: "m",
+        provider: "p",
+        modelId: "m1",
+        channel: "direct",
+        wireApi: "anthropic",
+        baseUrl: "https://x",
+        billing: { type: "free" },
+        capabilities: { contextWindow: 4096 },
+      });
+      const service = new TaskService(repo, new Router(), registry, new Scheduler(2, async () => {}), new SessionRepo(db));
+      const task = service.submit("任务", { modelId: model.id, cwd: dir });
+      expect(task.targetDir).toBe(dir);
+      expect(repo.get(task.id)?.targetDir).toBe(dir);
+      expect(() => service.submit("x", { modelId: model.id, cwd: "/nonexistent-ao-xyz" })).toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
       cleanup();
     }
   });

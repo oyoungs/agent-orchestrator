@@ -184,7 +184,11 @@ export class ClaudeAdapter implements AgentAdapter {
 
   private runClaude(args: string[], cwd: string, timeoutMs: number, settingsPath: string): Promise<string[]> {
     return new Promise((resolve, reject) => {
-      const child = spawn("claude", args, { cwd, env: { ...process.env }, stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn("claude", args, {
+        cwd,
+        env: { ...process.env, PWD: cwd },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
       const lines: string[] = [];
       let stderrTail = "";
       let timedOut = false;

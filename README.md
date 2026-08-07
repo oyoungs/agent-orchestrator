@@ -181,6 +181,9 @@ bash scripts/deploy.sh status       # 查看安装状态
 
 安装后 `agent` 命令可用（若提示 PATH 未包含目标目录，按提示导出后重开终端）。
 
+> 工作目录：任务在**执行 agent 命令的当前目录**下工作（副本隔离），
+> 与安装路径 / 项目源码位置无关。
+
 ---
 
 ## Architecture

@@ -140,6 +140,7 @@ async function handleTasks(
         modelId: body?.modelId !== undefined ? String(body.modelId) : undefined,
         parentId: body?.parentId !== undefined ? String(body.parentId) : undefined,
         sessionId: body?.sessionId !== undefined ? String(body.sessionId) : undefined,
+        cwd: body?.cwd !== undefined ? String(body.cwd) : undefined,
       });
       ctx.logger.info("task.submitted", { taskId: task.id, type: task.type });
       return sendJson(res, 201, task);

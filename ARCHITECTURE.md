@@ -364,6 +364,9 @@ Error Class → 重试 / 升级 / 询问用户的策略映射由 Router Policy �
 无 git 仓库 → cp -R 副本 → Worker 执行 → diff -ruN → 人工确认 apply
 ```
 
+任务工作目录 = 执行 `agent` 命令时的当前目录（cwd，由 CLI 提交时携带）；
+Workspace 副本以该目录为源（缺省回退项目根），与 daemon 所在位置解耦。
+
 每个 Coding Worker 的推荐循环：
 
 ```text

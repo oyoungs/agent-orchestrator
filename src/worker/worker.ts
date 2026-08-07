@@ -52,7 +52,7 @@ export async function executeTask(deps: WorkerDeps, task: Task): Promise<void> {
   let allocated = false;
 
   try {
-    const ws = deps.workspace.allocate(task.id);
+    const ws = deps.workspace.allocate(task.id, task.targetDir ?? undefined);
     allocated = true;
     insertRun(deps, runId, task, model, ws, "running");
     const outputDir = join(deps.stateDir, "runs", task.id);
