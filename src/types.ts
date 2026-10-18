@@ -10,6 +10,7 @@ export type TaskStatus =
   | "analyzing"
   | "queued"
   | "running"
+  | "validating"
   | "succeeded"
   | "failed"
   | "timed_out"

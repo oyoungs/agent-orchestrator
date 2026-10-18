@@ -159,7 +159,7 @@ export class TaskRepo {
 
   markInterrupted(): void {
     this.db
-      .prepare("UPDATE tasks SET status = 'interrupted', updated_at = ? WHERE status IN ('running', 'analyzing', 'queued', 'created')")
+      .prepare("UPDATE tasks SET status = 'interrupted', updated_at = ? WHERE status IN ('running', 'validating', 'analyzing', 'queued', 'created')")
       .run(Date.now());
   }
 }

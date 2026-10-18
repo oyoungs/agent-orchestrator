@@ -9,7 +9,7 @@ import { ModelRegistry } from "../registry/modelRegistry.ts";
 import type { SessionRepo } from "../store/sessionRepo.ts";
 import { TaskRepo } from "../store/taskRepo.ts";
 import type { AppConfig, ModelRecord, Task, UsageRecord } from "../types.ts";
-import { Validator } from "../validator/validator.ts";
+import { Validator, type ValidationResult } from "../validator/validator.ts";
 import { WorkspaceManager } from "../workspace/workspace.ts";
 
 export class WorkerFailure extends Error {
@@ -98,7 +98,7 @@ export async function executeTask(deps: WorkerDeps, task: Task): Promise<void> {
       deps.logger.info("session.context_updated", { taskId: task.id, sessionId: task.sessionKey });
     }
 
-    const validation = await deps.validator.run(task.type, ws);
+    const validation = await runValidation(deps, task, ws);
     const summary = JSON.stringify({ agentResult: lastAgentResult ?? null, validation });
     if (validation.ok) {
       deps.taskRepo.updateStatus(task.id, "succeeded", { finishedAt: Date.now(), resultSummary: summary });
@@ -144,6 +144,13 @@ async function buildChainContext(deps: WorkerDeps, task: Task, maxTurns = 5): Pr
     .reverse()
     .map((t) => `用户: ${t.prompt}${t.result ? `\n结果: ${t.result}` : ""}`)
     .join("\n\n");
+}
+
+/** 验证阶段单独落状态，便于客户端展示「验证中」 */
+async function runValidation(deps: WorkerDeps, task: Task, ws: string): Promise<ValidationResult> {
+  deps.taskRepo.updateStatus(task.id, "validating");
+  deps.logger.info("task.validating", { taskId: task.id });
+  return deps.validator.run(task.type, ws);
 }
 
 async function failTask(
