@@ -75,6 +75,13 @@ export class SessionRepo {
     this.db.prepare("UPDATE sessions SET context = ?, updated_at = ? WHERE id = ?").run(next, Date.now(), sessionId);
   }
 
+  /** 清空会话累积上下文（保留会话与任务历史）；返回清空前的字符数 */
+  clearContext(sessionId: string): number {
+    const previous = this.getContext(sessionId).length;
+    this.db.prepare("UPDATE sessions SET context = '', updated_at = ? WHERE id = ?").run(Date.now(), sessionId);
+    return previous;
+  }
+
   private taskFromRow(row: Record<string, unknown>): Task {
     return {
       id: String(row.id),

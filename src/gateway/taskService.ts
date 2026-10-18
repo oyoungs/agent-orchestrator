@@ -135,6 +135,12 @@ export class TaskService {
     return this.sessions.tasksOf(id);
   }
 
+  /** 清空会话累积上下文（保留会话与任务历史） */
+  clearSessionContext(id: string): { clearedChars: number } {
+    this.getSession(id); // 不存在时抛 SESSION_NOT_FOUND
+    return { clearedChars: this.sessions.clearContext(id) };
+  }
+
   cancel(id: string): Task {
     const task = this.get(id);
     const cancellable =

@@ -42,4 +42,19 @@ describe("session context", () => {
       cleanup();
     }
   });
+
+  it("clearContext 清空上下文并返回清空前的字符数", () => {
+    const { db, cleanup } = tempDb();
+    try {
+      const sessions = new SessionRepo(db);
+      sessions.ensure("s1", "标题");
+      sessions.appendTurn("s1", "问", "答");
+      const before = sessions.getContext("s1").length;
+      expect(sessions.clearContext("s1")).toBe(before);
+      expect(sessions.getContext("s1")).toBe("");
+      expect(sessions.get("s1")?.context).toBe("");
+    } finally {
+      cleanup();
+    }
+  });
 });
