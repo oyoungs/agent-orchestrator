@@ -23,6 +23,10 @@ export class Spinner {
     this.message = message;
   }
 
+  get active(): boolean {
+    return this.timer !== null;
+  }
+
   stop(): void {
     if (this.timer) {
       clearInterval(this.timer);

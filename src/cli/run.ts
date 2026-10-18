@@ -1,48 +1,50 @@
 import type { DaemonClient } from "./client.ts";
 import { sleep } from "./client.ts";
-import { Spinner } from "./spinner.ts";
 import { MarkdownStream, renderMarkdown } from "./markdown.ts";
-
-const TERMINAL = new Set(["succeeded", "failed", "validation_failed", "cancelled", "timed_out"]);
+import {
+  ProgressReporter,
+  TERMINAL_STATUSES,
+  describeTaskProgress,
+  parseRoutingInfo,
+  pollDelay,
+  routingSourceLabel,
+  summarizeTaskResult,
+} from "./taskProgress.ts";
 
 export async function runTask(client: DaemonClient, prompt: string): Promise<void> {
   const task = await client.request("POST", "/v1/tasks", { prompt, cwd: process.cwd() });
-  console.log(`task ${task.id} submitted · type=${task.type}${task.status === "analyzing" ? " · analyzing" : ""}`);
-  const spinner = new Spinner();
+  console.log(`task ${task.id} submitted · type=${task.type}`);
+  const progress = new ProgressReporter();
   let mdStream: MarkdownStream | null = null;
   let printed = 0;
-  let analysisShown = false;
-  let routingShown = false;
-  let thinkingShown = false;
   let sawText = false;
-  let routingModel: string | undefined;
+  let routingShown = false;
+
   for (let i = 0; i < 600; i += 1) {
     const current = await client.request("GET", `/v1/tasks/${task.id}`);
-    if (!analysisShown && current.status === "analyzing") {
-      analysisShown = true;
-      spinner.start("分析中…（免费模型）");
-    } else if (!routingShown && current.routingInfo) {
+
+    if (!routingShown && current.routingInfo) {
       routingShown = true;
-      spinner.stop();
-      try {
-        const info = JSON.parse(current.routingInfo) as { model?: string; source?: string };
-        routingModel = info.model;
-        console.log(`已选择模型 ${info.model ?? "-"}（${info.source === "free-model" ? "免费模型分析" : "规则路由"}）`);
-      } catch {
-        console.log("已选择模型（路由完成）");
+      const info = parseRoutingInfo(current.routingInfo);
+      if (info) {
+        progress.stop();
+        console.log(`已选择模型 ${info.model ?? "-"}（${routingSourceLabel(info.source)}）`);
+        progress.reset();
       }
     }
-    if (!thinkingShown && current.status === "running") {
-      thinkingShown = true;
-      spinner.start(`模型 ${routingModel ?? "…"} 正在思考`);
-    }
+
+    const line = describeTaskProgress(current);
+    if (line) progress.report(line);
+
     const out = await client.request("GET", `/v1/tasks/${task.id}/output?after=${printed}`);
     if (out.events?.length) {
       for (const ev of out.events) {
-        if (ev.type === "thinking" && !sawText && !thinkingShown) spinner.start(`模型 ${ev.model} 正在思考`);
         if (ev.type === "text" && ev.text) {
-          if (!sawText) spinner.stop();
-          sawText = true;
+          if (!sawText) {
+            progress.stop();
+            progress.mute();
+            sawText = true;
+          }
           if (process.stdout.isTTY) {
             mdStream ??= new MarkdownStream();
             mdStream.append(String(ev.text));
@@ -50,31 +52,32 @@ export async function runTask(client: DaemonClient, prompt: string): Promise<voi
             console.log(`  ${String(ev.text)}`);
           }
         } else if (ev.type === "tool") {
-          spinner.stop();
+          progress.stop();
           const mark = ev.status === "failed" ? "✗" : ev.status === "denied" ? "⛔" : "✓";
           const input = ev.input !== undefined ? ` ${JSON.stringify(ev.input).slice(0, 120)}` : "";
           console.log(`  [工具] ${mark} ${String(ev.tool)}${input}`);
           if (ev.output) {
-            const out = String(ev.output).trim().slice(0, 200);
-            if (out) console.log(`         ${out.replace(/\n/g, "\n         ")}`);
+            const outText = String(ev.output).trim().slice(0, 200);
+            if (outText) console.log(`         ${outText.replace(/\n/g, "\n         ")}`);
           }
         } else if (ev.type === "error") {
-          spinner.stop();
-          console.error(`  [error] ${String(ev.message)}`);
+          progress.stop();
+          console.error(`  [错误] ${String(ev.message)}`);
         }
       }
       printed = out.total ?? printed;
     }
-    if (TERMINAL.has(current.status)) {
-      spinner.stop();
+
+    if (TERMINAL_STATUSES.has(current.status)) {
+      progress.stop();
       mdStream?.finish();
       printTask(current);
       process.exitCode = current.status === "succeeded" ? 0 : 1;
       return;
     }
-    await sleep(1000);
+    await sleep(pollDelay(i));
   }
-  spinner.stop();
+  progress.stop();
   console.error("task did not finish within polling window");
   process.exitCode = 1;
 }
@@ -110,36 +113,18 @@ function printEvent(ev: { type?: string; text?: unknown; tool?: unknown; input?:
 }
 
 function printTask(t: any): void {
-  console.log(`task ${t.id} · ${t.type} · ${t.status} · model=${t.modelId ?? "-"}`);
-  if (!t.resultSummary) return;
-  try {
-    const summary = JSON.parse(t.resultSummary);
-    if (summary.agentResult !== undefined && summary.agentResult !== null) {
-      if (process.stdout.isTTY) {
-        console.log("  result:");
-        console.log(renderMarkdown(String(summary.agentResult)));
-      } else {
-        console.log(`  result: ${String(summary.agentResult).slice(0, 500)}`);
-      }
-    }
-    if (summary.validation?.checks) {
-      for (const c of summary.validation.checks) {
-        console.log(
-          `  check ${c.name}: ${c.ok ? "PASS" : "FAIL"}${c.output ? ` — ${String(c.output).slice(0, 120)}` : ""}`,
-        );
-      }
-    } else if (summary.checks) {
-      for (const c of summary.checks) {
-        console.log(
-          `  check ${c.name}: ${c.ok ? "PASS" : "FAIL"}${c.output ? ` — ${String(c.output).slice(0, 120)}` : ""}`,
-        );
-      }
-    } else if (summary.errorClass) {
-      console.log(`  error: ${summary.errorClass} — ${String(summary.error ?? "").slice(0, 300)}`);
+  const view = summarizeTaskResult(t);
+  console.log(view.heading);
+  if (view.result) {
+    if (process.stdout.isTTY) {
+      console.log("  result:");
+      console.log(renderMarkdown(view.result));
     } else {
-      console.log(`  ${JSON.stringify(summary).slice(0, 300)}`);
+      console.log(`  result: ${view.result.slice(0, 500)}`);
     }
-  } catch {
-    console.log(`  ${String(t.resultSummary).slice(0, 300)}`);
   }
+  for (const c of view.checks) {
+    console.log(`  check ${c.name}: ${c.ok ? "PASS" : "FAIL"}${c.output ? ` — ${String(c.output).slice(0, 120)}` : ""}`);
+  }
+  if (view.error) console.log(`  error: ${view.error}`);
 }
