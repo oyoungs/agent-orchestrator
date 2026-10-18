@@ -96,14 +96,18 @@ export async function chat(client: DaemonClient, opts: ChatOptions = {}): Promis
         console.log("bye");
         break;
       }
-      await handleCommand(
-        client,
-        input,
-        () => activeSessionId,
-        (id) => (activeSessionId = id),
-        (id) => (lastTaskId = id),
-        (id) => (preferredModelId = id),
-      );
+      try {
+        await handleCommand(
+          client,
+          input,
+          () => activeSessionId,
+          (id) => (activeSessionId = id),
+          (id) => (lastTaskId = id),
+          (id) => (preferredModelId = id),
+        );
+      } catch (err) {
+        console.error(`命令执行失败：${err instanceof Error ? err.message : String(err)}`);
+      }
       continue;
     }
 
@@ -220,7 +224,7 @@ async function runTurn(client: DaemonClient, taskId: string): Promise<string> {
   return taskId;
 }
 
-async function handleCommand(
+export async function handleCommand(
   client: DaemonClient,
   input: string,
   getSession: () => string | undefined,
@@ -233,6 +237,8 @@ async function handleCommand(
     case "/help":
       console.log(`命令列表：
   /help            帮助
+  /clear           清空当前会话上下文并开启新会话（原会话保留，/sessions 可恢复）
+  /new             开始新会话/项目（当前会话保留，/sessions 可恢复）
   /history         当前会话任务队列
   /show <n|id>     查看会话中某个任务的完整输出（序号或 task id）
   /context         查看当前会话自动维护的上下文
@@ -243,6 +249,26 @@ async function handleCommand(
   /model <id>      指定下一个任务使用的模型（/models 查看 id）
   /quit, /exit     退出`);
       break;
+    case "/clear": {
+      const sessionId = getSession();
+      if (!sessionId) {
+        console.log("当前还没有会话；下一条消息将创建新会话（无需清空上下文）");
+        break;
+      }
+      const res = await client.request("POST", `/v1/sessions/${sessionId}/clear`);
+      setSession(undefined);
+      setLast(undefined);
+      console.log(
+        `上下文已清空（${formatContextSize(Number(res?.clearedChars) || 0)}）并开启新会话；原会话已保留，/sessions 可恢复`,
+      );
+      break;
+    }
+    case "/new": {
+      setSession(undefined);
+      setLast(undefined);
+      console.log("已开始新会话；下一条消息将创建新的会话/项目（原会话已保留，/sessions 可恢复）");
+      break;
+    }
     case "/resume": {
       if (!arg) {
         console.log("用法：/resume <session-id 或 task-id>（/sessions 或 /tasks 查看）");
