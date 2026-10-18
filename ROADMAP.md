@@ -118,7 +118,8 @@ Agent Adapter：ACP-first（opencode / openclaw / reasonix）+ Claude / Codex �
 「免费模型分析中 → 已选择模型 X → 模型 X 正在思考 → 流式结果」，
 继续输入自动追加为同一会话/项目（任务队列），`/history` 可回看；
 首次输入自动创建 session，`/resume <session-id>` 或 `--resume` 可恢复历史会话；
-每轮任务完成后自动把「输入+输出」追加到会话上下文，下一轮自动携带（`/context` 查看）。
+每轮任务完成后自动把「输入+输出」追加到会话上下文，下一轮自动携带（`/context` 查看）；
+`/clear` 清空当前会话上下文并自动开启新会话，`/new` 仅开启新会话（原会话保留，可 `/resume` 恢复）。
 
 ---
 

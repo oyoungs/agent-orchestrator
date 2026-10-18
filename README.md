@@ -159,7 +159,8 @@ node src/cli/index.ts chat --resume <session-id 或 task-id>   # 恢复历史会
 # 首次输入自动创建会话/项目，之后每个任务自动追加到该会话的任务队列
 # 每轮任务的输入+输出自动累积为会话上下文，下一轮自动携带（/context 查看）
 # chat 中模型输出实时渲染 Markdown（标题/加粗/列表/代码块/表格等）
-# chat 内可用 /help /history /sessions /resume <id> /tasks /models /model <id> /quit
+# chat 内可用 /help /history /context /clear /new /sessions /resume <id> /tasks /models /model <id> /quit
+# /clear 清空当前会话上下文并自动开启新会话；/new 仅开启新会话（原会话保留，均可 /resume 恢复）
 
 # 4. 查看状态（含执行过程回放）/ 移除模型 / 停止
 node src/cli/index.ts status <task-id>
