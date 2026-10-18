@@ -70,23 +70,26 @@ export class TaskService {
     }
     this.sessions.ensure(sessionKey, trimmed);
 
-    let modelId: string | null = null;
+    let modelRecord: ModelRecord | null = null;
     if (opts.modelId) {
       const model = this.registry.get(opts.modelId);
       if (model.status !== "active") throw new TaskError(`model ${opts.modelId} is not active`, "MODEL_INACTIVE");
-      modelId = model.id;
+      modelRecord = model;
     }
 
     const task = this.repo.create({
       type: this.router.classify(trimmed),
       prompt: trimmed,
-      modelId,
+      modelId: modelRecord?.id ?? null,
       parentId: opts.parentId ?? null,
       sessionKey,
       targetDir,
+      routingInfo: modelRecord
+        ? JSON.stringify({ source: "explicit", model: `${modelRecord.provider}/${modelRecord.modelId}`, analysis: null })
+        : null,
     });
 
-    if (modelId) {
+    if (modelRecord) {
       const queued = this.repo.updateStatus(task.id, "queued") ?? task;
       this.scheduler.enqueue(queued);
       return queued;
