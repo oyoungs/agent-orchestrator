@@ -63,7 +63,7 @@ async function handle(ctx: ServerContext, req: IncomingMessage, res: ServerRespo
     }
     if (resource === "models") return await handleModels(ctx, req, res, id, sub);
     if (resource === "tasks") return await handleTasks(ctx, req, res, id, sub, url.searchParams);
-    if (resource === "sessions") return await handleSessions(ctx, req, res, id);
+    if (resource === "sessions") return await handleSessions(ctx, req, res, id, sub);
     sendJson(res, 404, { error: { code: "NOT_FOUND", message: `unknown resource: ${resource}` } });
   } catch (err) {
     mapError(res, err);
@@ -170,7 +170,13 @@ async function handleSessions(
   req: IncomingMessage,
   res: ServerResponse,
   id?: string,
+  sub?: string,
 ): Promise<void> {
+  if (id && sub === "clear" && req.method === "POST") {
+    const result = ctx.taskService.clearSessionContext(id);
+    ctx.logger.info("session.cleared", { sessionId: id, clearedChars: result.clearedChars });
+    return sendJson(res, 200, { ok: true, clearedChars: result.clearedChars });
+  }
   if (req.method !== "GET") {
     return sendJson(res, 405, { error: { code: "METHOD_NOT_ALLOWED", message: `unsupported ${req.method}` } });
   }
@@ -208,7 +214,7 @@ function mapError(res: ServerResponse, err: unknown): void {
   if (err instanceof ModelNotFoundError) {
     return sendJson(res, 404, { error: { code: err.code, message: err.message } });
   }
-  if (err instanceof TaskError && err.code === "TASK_NOT_FOUND") {
+  if (err instanceof TaskError && (err.code === "TASK_NOT_FOUND" || err.code === "SESSION_NOT_FOUND")) {
     return sendJson(res, 404, { error: { code: err.code, message: err.message } });
   }
   if (err instanceof NoModelsError) {
